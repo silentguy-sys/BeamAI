@@ -1,5 +1,5 @@
 
-const API_URL = "";
+const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
 
 const chatArea = document.getElementById("chatArea");
 const messageInput = document.getElementById("messageInput");
