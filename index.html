@@ -1,0 +1,119 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beam</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <aside class="sidebar">
+        <div class="sidebar-top">
+            <div class="beam-mark">B</div>
+            <span class="sidebar-title">Beam</span>
+        </div>
+
+        <button class="new-chat" id="newChatButton">
+            <span>＋</span>
+            <span>New chat</span>
+        </button>
+
+        <div class="sidebar-section">
+            <div class="section-label">Today</div>
+            <div class="chat-item active">
+                <span class="chat-icon">◌</span>
+                <span>New conversation</span>
+            </div>
+        </div>
+
+        <div class="sidebar-bottom">
+            <div class="model-info">
+                <div class="model-dot"></div>
+                <div>
+                    <strong>Beam o2</strong>
+                    <small>Online</small>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <button class="mobile-menu" id="mobileMenu">☰</button>
+
+            <div class="model-name">
+                <div class="mini-mark">B</div>
+                <span>Beam o2</span>
+            </div>
+
+            <div class="connection">
+                <span id="statusDot"></span>
+                <span id="statusText">Connecting</span>
+            </div>
+        </header>
+
+        <section class="chat-area" id="chatArea">
+
+            <div class="welcome" id="welcome">
+                <div class="hero-mark">B</div>
+                <h1>How can I help?</h1>
+                <p>Talk to Beam about anything.</p>
+
+                <div class="suggestions">
+                    <button data-prompt="Hey Beam!">
+                        <strong>Say hello</strong>
+                        <span>Start a conversation</span>
+                    </button>
+
+                    <button data-prompt="Can you help me with something?">
+                        <strong>Get help</strong>
+                        <span>Ask Beam a question</span>
+                    </button>
+
+                    <button data-prompt="Tell me something interesting.">
+                        <strong>Explore</strong>
+                        <span>Learn something new</span>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <footer class="composer-area">
+
+            <div class="composer">
+                <textarea
+                    id="messageInput"
+                    rows="1"
+                    placeholder="Message Beam..."
+                    autocomplete="off"
+                ></textarea>
+
+                <button
+                    class="send-button"
+                    id="sendButton"
+                    aria-label="Send message"
+                >
+                    <span>↑</span>
+                </button>
+            </div>
+
+            <div class="footer-note">
+                Beam can make mistakes. Check important information.
+            </div>
+
+        </footer>
+
+    </main>
+
+</div>
+
+<script src="/app.js"></script>
+
+</body>
+</html>
