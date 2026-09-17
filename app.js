@@ -1,872 +1,718 @@
-const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
-const STORAGE_KEY = "beam_conversations_v2";
-const ACTIVE_KEY = "beam_active_conversation_v2";
 
-const MODELS = {
-"beam-o2": {
-name: "Beam o2",
-size: "1.5B",
-description: "The smaller and faster Beam model."
-},
-"beam-1": {
-name: "Beam 1",
-size: "8B",
-description: "The larger Beam model with a substantially bigger parameter count."
-}
+const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
+
+const CONVERSATIONS_KEY = "beam_conversations_v2";
+const ACTIVE_CONVERSATION_KEY = "beam_active_conversation_v2";
+const SELECTED_MODEL_KEY = "beam_selected_model_v1";
+
+const MODEL_INFO = {
+    "beam-1": {
+        name: "Beam 1",
+        short: "8B · Main / GPU",
+        description: "Qwen3-8B · 4-bit NF4 · GPU/RAM offload",
+        icon: "✦"
+    },
+    "beam-o2": {
+        name: "Beam o2",
+        short: "1.5B · Lightweight / CPU",
+        description: "1.5B · CPU",
+        icon: "◈"
+    }
 };
 
-const chatArea = document.getElementById("chatArea");
-const messageInput = document.getElementById("messageInput");
-const sendButton = document.getElementById("sendButton");
-const newChatButton = document.getElementById("newChatButton");
-const conversationList = document.getElementById("conversationList");
-const emptyConversations = document.getElementById("emptyConversations");
-const conversationCount = document.getElementById("conversationCount");
-const conversationHeading = document.getElementById("conversationHeading");
-const chatSearch = document.getElementById("chatSearch");
-const mobileMenu = document.getElementById("mobileMenu");
-const sidebar = document.getElementById("sidebar");
-const exportButton = document.getElementById("exportButton");
-const clearButton = document.getElementById("clearButton");
-const scrollBottom = document.getElementById("scrollBottom");
-const modal = document.getElementById("modal");
-const modalClose = document.getElementById("modalClose");
-const modalContent = document.getElementById("modalContent");
-const toastContainer = document.getElementById("toastContainer");
-
-const modelSelector = document.getElementById("modelSelector");
-const modelSelectorButton = document.getElementById("modelSelectorButton");
-const modelMenu = document.getElementById("modelMenu");
-const sidebarModelName = document.getElementById("sidebarModelName");
-const sidebarModelStatus = document.getElementById("sidebarModelStatus");
-const topbarModelName = document.getElementById("topbarModelName");
-const topbarModelStatus = document.getElementById("topbarModelStatus");
-
 let conversations = loadConversations();
-let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
-let currentView = "chats";
-let thinking = false;
+let activeConversationId = localStorage.getItem(ACTIVE_CONVERSATION_KEY);
+let selectedModel = localStorage.getItem(SELECTED_MODEL_KEY) || "beam-1";
+let generating = false;
+
+if (!MODEL_INFO[selectedModel]) {
+    selectedModel = "beam-1";
+}
 
 function loadConversations() {
-try {
-const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-
-```
-    if (!Array.isArray(saved)) {
+    try {
+        return JSON.parse(localStorage.getItem(CONVERSATIONS_KEY)) || [];
+    } catch {
         return [];
     }
-
-    return saved.map(conversation => ({
-        ...conversation,
-        model: MODELS[conversation.model]
-            ? conversation.model
-            : "beam-o2"
-    }));
-} catch {
-    return [];
-}
-```
-
 }
 
 function saveConversations() {
-localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
-}
-
-function getSelectedModel() {
-const conversation = getActiveConversation();
-
-```
-if (!conversation) {
-    return "beam-o2";
-}
-
-if (!MODELS[conversation.model]) {
-    conversation.model = "beam-o2";
-}
-
-return conversation.model;
-```
-
-}
-
-function updateModelUI() {
-const modelId = getSelectedModel();
-const model = MODELS[modelId];
-
-```
-sidebarModelName.textContent = model.name;
-sidebarModelStatus.textContent = `${model.size} · Online`;
-
-topbarModelName.textContent = model.name;
-topbarModelStatus.textContent = "Online";
-
-document.querySelectorAll(".model-option").forEach(option => {
-    option.classList.toggle(
-        "active",
-        option.dataset.model === modelId
+    localStorage.setItem(
+        CONVERSATIONS_KEY,
+        JSON.stringify(conversations)
     );
-});
-```
-
 }
 
 function createConversation() {
-const now = Date.now();
+    const conversation = {
+        id: crypto.randomUUID(),
+        title: "New chat",
+        messages: [],
+        created_at: Date.now()
+    };
 
-```
-const conversation = {
-    id: crypto.randomUUID(),
-    sessionId: null,
-    model: "beam-o2",
-    title: "New conversation",
-    messages: [],
-    createdAt: now,
-    updatedAt: now
-};
+    conversations.unshift(conversation);
+    activeConversationId = conversation.id;
 
-conversations.unshift(conversation);
-activeConversationId = conversation.id;
+    localStorage.setItem(
+        ACTIVE_CONVERSATION_KEY,
+        activeConversationId
+    );
 
-localStorage.setItem(ACTIVE_KEY, activeConversationId);
-saveConversations();
+    saveConversations();
 
-updateModelUI();
-renderConversationList();
-renderChat();
-```
-
+    return conversation;
 }
 
 function getActiveConversation() {
-return conversations.find(
-conversation => conversation.id === activeConversationId
-) || null;
-}
-
-function ensureActiveConversation() {
-let conversation = getActiveConversation();
-
-```
-if (!conversation) {
-    createConversation();
-    conversation = getActiveConversation();
-}
-
-return conversation;
-```
-
-}
-
-async function createSession(conversation) {
-const response = await fetch(`${API_URL}/session`, {
-method: "POST",
-headers: {
-"Content-Type": "application/json"
-}
-});
-
-```
-if (!response.ok) {
-    throw new Error(`Session creation failed (${response.status})`);
-}
-
-const data = await response.json();
-
-conversation.sessionId = data.session_id;
-conversation.updatedAt = Date.now();
-
-saveConversations();
-
-return data.session_id;
-```
-
-}
-
-async function ensureSession(conversation) {
-if (conversation.sessionId) {
-return conversation.sessionId;
-}
-
-```
-return await createSession(conversation);
-```
-
-}
-
-async function sendToServer(conversation, message) {
-let sessionId = await ensureSession(conversation);
-
-```
-let response = await fetch(`${API_URL}/chat`, {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-        session_id: sessionId,
-        message,
-        model: conversation.model
-    })
-});
-
-if (response.status === 404) {
-    conversation.sessionId = null;
-    saveConversations();
-
-    sessionId = await createSession(conversation);
-
-    response = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            session_id: sessionId,
-            message,
-            model: conversation.model
-        })
-    });
-}
-
-if (!response.ok) {
-    let detail = "";
-
-    try {
-        const errorData = await response.json();
-        detail = errorData.detail || "";
-    } catch {
-    }
-
-    throw new Error(
-        detail || `Server error (${response.status})`
+    return conversations.find(
+        conversation => conversation.id === activeConversationId
     );
 }
 
-return await response.json();
-```
+function ensureConversation() {
+    let conversation = getActiveConversation();
 
-}
-
-function formatTime(timestamp) {
-return new Intl.DateTimeFormat(undefined, {
-hour: "numeric",
-minute: "2-digit"
-}).format(new Date(timestamp));
-}
-
-function formatConversationTime(timestamp) {
-const date = new Date(timestamp);
-const now = new Date();
-
-```
-const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-
-if (sameDay) {
-    return formatTime(timestamp);
-}
-
-const yesterday = new Date(now);
-yesterday.setDate(now.getDate() - 1);
-
-const isYesterday =
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate();
-
-if (isYesterday) {
-    return "Yesterday";
-}
-
-return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric"
-}).format(date);
-```
-
-}
-
-function deriveTitle(text) {
-const cleaned = text.replace(/\s+/g, " ").trim();
-
-```
-if (!cleaned) {
-    return "New conversation";
-}
-
-if (cleaned.length <= 48) {
-    return cleaned;
-}
-
-return cleaned.slice(0, 45).trimEnd() + "...";
-```
-
-}
-
-function showToast(message) {
-const toast = document.createElement("div");
-
-```
-toast.className = "toast";
-toast.textContent = message;
-
-toastContainer.appendChild(toast);
-
-setTimeout(() => toast.remove(), 2600);
-```
-
-}
-
-function renderConversationList() {
-const query = chatSearch.value.trim().toLowerCase();
-
-```
-let filtered = conversations.filter(conversation => {
-    if (!query) {
-        return true;
+    if (!conversation) {
+        conversation = createConversation();
     }
 
-    return (
-        conversation.title.toLowerCase().includes(query) ||
-        conversation.messages.some(message =>
-            message.content.toLowerCase().includes(query)
-        )
+    return conversation;
+}
+
+function updateModelUI() {
+    const model = MODEL_INFO[selectedModel];
+
+    document.getElementById("sidebarModelName").textContent =
+        model.name;
+
+    document.getElementById("sidebarModelStatus").textContent =
+        model.short;
+
+    document.getElementById("topbarModelName").textContent =
+        model.name;
+
+    document.querySelectorAll(".model-option").forEach(option => {
+        option.classList.toggle(
+            "active",
+            option.dataset.model === selectedModel
+        );
+    });
+
+    document.getElementById("modalTitle").textContent =
+        model.name;
+
+    document.getElementById("modalDescription").textContent =
+        model.description;
+}
+
+function setModel(model) {
+    if (!MODEL_INFO[model]) return;
+    if (generating) return;
+
+    selectedModel = model;
+
+    localStorage.setItem(
+        SELECTED_MODEL_KEY,
+        selectedModel
     );
-});
 
-filtered.sort((a, b) => b.updatedAt - a.updatedAt);
+    updateModelUI();
+    closeModelMenu();
+}
 
-conversationHeading.textContent =
-    currentView === "recents" ? "Recent" : "Today";
+function openModelMenu() {
+    if (generating) return;
 
-conversationCount.textContent = filtered.length;
+    document
+        .getElementById("modelSelector")
+        .classList.add("open");
+}
 
-conversationList.innerHTML = "";
+function closeModelMenu() {
+    document
+        .getElementById("modelSelector")
+        .classList.remove("open");
+}
 
-emptyConversations.style.display =
-    filtered.length === 0 ? "flex" : "none";
+function renderConversations() {
+    const list = document.getElementById("conversationList");
+    list.innerHTML = "";
 
-for (const conversation of filtered) {
-    const item = document.createElement("div");
-    item.className = "conversation-item";
+    conversations.forEach(conversation => {
+        const button = document.createElement("button");
 
-    if (conversation.id === activeConversationId) {
-        item.classList.add("active");
+        button.className =
+            "conversation-item" +
+            (conversation.id === activeConversationId
+                ? " active"
+                : "");
+
+        button.textContent =
+            conversation.title || "New chat";
+
+        button.onclick = () => {
+            if (generating) return;
+
+            activeConversationId = conversation.id;
+
+            localStorage.setItem(
+                ACTIVE_CONVERSATION_KEY,
+                activeConversationId
+            );
+
+            renderConversations();
+            renderMessages();
+            closeSidebar();
+        };
+
+        list.appendChild(button);
+    });
+}
+
+function renderMessages() {
+    const chat = document.getElementById("chat");
+    const welcome = document.getElementById("welcome");
+
+    chat.innerHTML = "";
+
+    const conversation = getActiveConversation();
+
+    if (!conversation || conversation.messages.length === 0) {
+        chat.appendChild(welcome);
+        welcome.style.display = "flex";
+        return;
     }
 
-    const content = document.createElement("div");
-    content.className = "conversation-item-content";
+    welcome.style.display = "none";
 
-    const title = document.createElement("div");
-    title.className = "conversation-title";
-    title.textContent = conversation.title;
-
-    const time = document.createElement("div");
-    time.className = "conversation-time";
-
-    const model = MODELS[conversation.model] || MODELS["beam-o2"];
-
-    time.textContent =
-        `${model.name} · ${formatConversationTime(conversation.updatedAt)}`;
-
-    content.appendChild(title);
-    content.appendChild(time);
-
-    const deleteButton = document.createElement("button");
-
-    deleteButton.className = "conversation-delete";
-    deleteButton.textContent = "×";
-    deleteButton.title = "Delete conversation";
-
-    deleteButton.addEventListener("click", event => {
-        event.stopPropagation();
-        deleteConversation(conversation.id);
-    });
-
-    item.appendChild(content);
-    item.appendChild(deleteButton);
-
-    item.addEventListener("click", () => {
-        openConversation(conversation.id);
-    });
-
-    conversationList.appendChild(item);
-}
-```
-
-}
-
-function deleteConversation(id) {
-conversations = conversations.filter(
-conversation => conversation.id !== id
-);
-
-```
-saveConversations();
-
-if (activeConversationId === id) {
-    activeConversationId = null;
-    localStorage.removeItem(ACTIVE_KEY);
-
-    if (conversations.length > 0) {
-        conversations.sort(
-            (a, b) => b.updatedAt - a.updatedAt
-        );
-
-        activeConversationId = conversations[0].id;
-
-        localStorage.setItem(
-            ACTIVE_KEY,
-            activeConversationId
-        );
-    }
-}
-
-updateModelUI();
-renderConversationList();
-renderChat();
-
-showToast("Conversation deleted");
-```
-
-}
-
-function openConversation(id) {
-const conversation = conversations.find(
-conversation => conversation.id === id
-);
-
-```
-if (!conversation) {
-    return;
-}
-
-activeConversationId = id;
-
-localStorage.setItem(ACTIVE_KEY, id);
-
-updateModelUI();
-renderConversationList();
-renderChat();
-
-sidebar.classList.remove("open");
-```
-
-}
-
-function setConversationModel(modelId) {
-if (!MODELS[modelId]) {
-return;
-}
-
-```
-const conversation = ensureActiveConversation();
-
-if (conversation.model === modelId) {
-    modelMenu.classList.remove("open");
-    return;
-}
-
-conversation.model = modelId;
-conversation.sessionId = null;
-conversation.updatedAt = Date.now();
-
-saveConversations();
-
-updateModelUI();
-renderConversationList();
-
-modelMenu.classList.remove("open");
-
-showToast(`${MODELS[modelId].name} selected`);
-```
-
-}
-
-function addMessageElement(role, content, timestamp) {
-const message = document.createElement("div");
-message.className = `message ${role}`;
-
-```
-const avatar = document.createElement("div");
-
-avatar.className =
-    `avatar ${role === "assistant" ? "beam" : "user"}`;
-
-if (role === "assistant") {
-    const img = document.createElement("img");
-
-    img.src = "./beamlogo1.png";
-    img.alt = "Beam";
-
-    avatar.appendChild(img);
-} else {
-    avatar.textContent = "YOU";
-}
-
-const body = document.createElement("div");
-body.className = "message-body";
-
-const header = document.createElement("div");
-header.className = "message-header";
-
-const name = document.createElement("span");
-name.className = "message-name";
-name.textContent =
-    role === "assistant"
-        ? "Beam"
-        : "You";
-
-const time = document.createElement("span");
-time.className = "message-time";
-time.textContent = formatTime(timestamp);
-
-header.appendChild(name);
-header.appendChild(time);
-
-const text = document.createElement("div");
-text.className = "message-content";
-text.textContent = content;
-
-body.appendChild(header);
-body.appendChild(text);
-
-if (role === "assistant") {
-    const actions = document.createElement("div");
-    actions.className = "message-actions";
-
-    const copy = document.createElement("button");
-    copy.className = "copy-message";
-    copy.textContent = "Copy";
-
-    copy.addEventListener("click", async () => {
-        try {
-            await navigator.clipboard.writeText(content);
-
-            copy.textContent = "Copied";
-
-            setTimeout(() => {
-                copy.textContent = "Copy";
-            }, 1200);
-        } catch {
-            showToast("Couldn't copy message");
-        }
-    });
-
-    actions.appendChild(copy);
-    body.appendChild(actions);
-}
-
-message.appendChild(avatar);
-message.appendChild(body);
-
-return message;
-```
-
-}
-
-function renderWelcome() {
-const model = MODELS[getSelectedModel()];
-
-```
-const welcome = document.createElement("div");
-welcome.className = "welcome";
-
-welcome.innerHTML = `
-    <div class="welcome-hero">
-        <div class="hero-logo">
-            <img src="./beamlogo1.png" alt="Beam">
-        </div>
-
-        <h1>What can I help with?</h1>
-
-        <p class="welcome-subtitle">
-            Ask ${model.name} a question, work through an idea,
-            write something, or just start a conversation.
-        </p>
-    </div>
-
-    <div class="suggestions">
-        <button class="suggestion" data-prompt="Explain something interesting to me.">
-            <span class="suggestion-icon">✦</span>
-            <strong>Explain something</strong>
-            <span>Break down a topic in a simple way.</span>
-        </button>
-
-        <button class="suggestion" data-prompt="Help me solve a problem.">
-            <span class="suggestion-icon">⌁</span>
-            <strong>Help me solve something</strong>
-            <span>Work through a problem step by step.</span>
-        </button>
-
-        <button class="suggestion" data-prompt="Give me an interesting idea for a project.">
-            <span class="suggestion-icon">◇</span>
-            <strong>Brainstorm</strong>
-            <span>Come up with something interesting.</span>
-        </button>
-
-        <button class="suggestion" data-prompt="Hey Beam, how are you?">
-            <span class="suggestion-icon">◌</span>
-            <strong>Just chat</strong>
-            <span>Start a normal conversation.</span>
-        </button>
-    </div>
-`;
-
-chatArea.appendChild(welcome);
-
-welcome.querySelectorAll(".suggestion").forEach(button => {
-    button.addEventListener("click", () => {
-        messageInput.value = button.dataset.prompt;
-        updateComposer();
-        resizeInput();
-        messageInput.focus();
-    });
-});
-```
-
-}
-
-function getMessageList() {
-let list = chatArea.querySelector(".message-list");
-
-```
-if (!list) {
-    list = document.createElement("div");
-    list.className = "message-list";
-    chatArea.appendChild(list);
-}
-
-return list;
-```
-
-}
-
-function renderChat() {
-chatArea.innerHTML = "";
-
-```
-updateModelUI();
-
-const conversation = getActiveConversation();
-
-if (!conversation || conversation.messages.length === 0) {
-    renderWelcome();
-    updateComposer();
-    return;
-}
-
-const list = document.createElement("div");
-list.className = "message-list";
-
-for (const message of conversation.messages) {
-    list.appendChild(
-        addMessageElement(
+    conversation.messages.forEach(message => {
+        addMessageToUI(
             message.role,
             message.content,
-            message.timestamp
-        )
-    );
+            message.model
+        );
+    });
+
+    scrollToBottom();
 }
 
-chatArea.appendChild(list);
+function addMessageToUI(role, content, model = null) {
+    const chat = document.getElementById("chat");
 
-requestAnimationFrame(() => {
-    chatArea.scrollTop = chatArea.scrollHeight;
-});
+    const wrapper = document.createElement("div");
+    wrapper.className = `message ${role}`;
 
-updateComposer();
-```
+    const inner = document.createElement("div");
+    inner.className = "message-inner";
 
+    if (role === "user") {
+        inner.textContent = content;
+    } else {
+        const header = document.createElement("div");
+        header.className = "message-header";
+
+        const modelName =
+            MODEL_INFO[model]?.name || "Beam";
+
+        header.textContent = modelName;
+
+        const body = document.createElement("div");
+        body.className = "message-content";
+        body.textContent = content;
+
+        inner.appendChild(header);
+        inner.appendChild(body);
+    }
+
+    wrapper.appendChild(inner);
+    chat.appendChild(wrapper);
+
+    return wrapper;
 }
 
-function showThinking() {
-removeThinking();
+function createStreamingMessage(model) {
+    const chat = document.getElementById("chat");
 
-```
-const list = getMessageList();
+    const wrapper = document.createElement("div");
+    wrapper.className = "message assistant";
 
-const model = MODELS[getSelectedModel()];
+    const inner = document.createElement("div");
+    inner.className = "message-inner";
 
-const thinkingElement = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "message-header";
+    header.textContent =
+        MODEL_INFO[model]?.name || "Beam";
 
-thinkingElement.className = "thinking";
-thinkingElement.id = "thinkingIndicator";
+    const body = document.createElement("div");
+    body.className = "message-content streaming";
 
-thinkingElement.innerHTML = `
-    <div class="avatar beam">
-        <img src="./beamlogo1.png" alt="Beam">
-    </div>
+    inner.appendChild(header);
+    inner.appendChild(body);
 
-    <div class="thinking-content">
-        <div class="thinking-header">
-            <span>${model.name}</span>
-        </div>
+    wrapper.appendChild(inner);
+    chat.appendChild(wrapper);
 
-        <div class="thinking-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-    </div>
-`;
-
-list.appendChild(thinkingElement);
-
-requestAnimationFrame(() => {
-    chatArea.scrollTop = chatArea.scrollHeight;
-});
-```
-
+    return body;
 }
 
-function removeThinking() {
-document.getElementById("thinkingIndicator")?.remove();
-}
+function showThinking(model) {
+    const chat = document.getElementById("chat");
 
-function updateComposer() {
-sendButton.disabled =
-thinking ||
-messageInput.value.trim().length === 0;
-}
+    const wrapper = document.createElement("div");
+    wrapper.className = "message assistant thinking-message";
 
-function resizeInput() {
-messageInput.style.height = "auto";
+    const inner = document.createElement("div");
+    inner.className = "message-inner";
 
-```
-messageInput.style.height =
-    Math.min(messageInput.scrollHeight, 190) + "px";
-```
+    const header = document.createElement("div");
+    header.className = "message-header";
+    header.textContent =
+        MODEL_INFO[model]?.name || "Beam";
 
+    const thinking = document.createElement("div");
+    thinking.className = "thinking";
+
+    thinking.innerHTML = `
+        <span></span>
+        <span></span>
+        <span></span>
+    `;
+
+    inner.appendChild(header);
+    inner.appendChild(thinking);
+    wrapper.appendChild(inner);
+    chat.appendChild(wrapper);
+
+    scrollToBottom();
+
+    return wrapper;
 }
 
 async function sendMessage() {
-const text = messageInput.value.trim();
+    if (generating) return;
 
-```
-if (!text || thinking) {
-    return;
+    const input = document.getElementById("messageInput");
+    const text = input.value.trim();
+
+    if (!text) return;
+
+    const conversation = ensureConversation();
+
+    if (conversation.messages.length === 0) {
+        conversation.title =
+            text.length > 40
+                ? text.substring(0, 40) + "..."
+                : text;
+    }
+
+    conversation.messages.push({
+        role: "user",
+        content: text
+    });
+
+    saveConversations();
+    renderConversations();
+
+    addMessageToUI("user", text);
+
+    input.value = "";
+    resizeTextarea();
+    updateSendButton();
+
+    generating = true;
+    updateGeneratingState();
+
+    const thinking = showThinking(selectedModel);
+
+    scrollToBottom();
+
+    try {
+        const response = await fetch(`${API_URL}/chat`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                session_id: conversation.id,
+                message: text,
+                model: selectedModel
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                `Server returned ${response.status}`
+            );
+        }
+
+        thinking.remove();
+
+        const contentType =
+            response.headers.get("content-type") || "";
+
+        if (
+            contentType.includes("text/event-stream") ||
+            contentType.includes("text/plain")
+        ) {
+            await handleStreamingResponse(
+                response,
+                conversation,
+                selectedModel
+            );
+        } else {
+            const data = await response.json();
+
+            const answer =
+                data.response ||
+                data.answer ||
+                data.message ||
+                "";
+
+            const assistantModel =
+                data.model || selectedModel;
+
+            conversation.messages.push({
+                role: "assistant",
+                content: answer,
+                model: assistantModel
+            });
+
+            saveConversations();
+
+            addMessageToUI(
+                "assistant",
+                answer,
+                assistantModel
+            );
+
+            scrollToBottom();
+        }
+
+    } catch (error) {
+        console.error(error);
+
+        thinking.remove();
+
+        const errorText =
+            "I couldn't connect to the Beam server.";
+
+        conversation.messages.push({
+            role: "assistant",
+            content: errorText,
+            model: selectedModel
+        });
+
+        saveConversations();
+
+        addMessageToUI(
+            "assistant",
+            errorText,
+            selectedModel
+        );
+
+        showToast("Connection failed");
+    }
+
+    generating = false;
+    updateGeneratingState();
 }
 
-const conversation = ensureActiveConversation();
-
-const timestamp = Date.now();
-
-conversation.messages.push({
-    role: "user",
-    content: text,
-    timestamp
-});
-
-if (
-    conversation.title === "New conversation" ||
-    conversation.messages.length === 1
+async function handleStreamingResponse(
+    response,
+    conversation,
+    model
 ) {
-    conversation.title = deriveTitle(text);
-}
+    const body = createStreamingMessage(model);
 
-conversation.updatedAt = timestamp;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-messageInput.value = "";
+    let fullText = "";
 
-resizeInput();
+    while (true) {
+        const { value, done } =
+            await reader.read();
 
-saveConversations();
-renderConversationList();
-renderChat();
+        if (done) break;
 
-thinking = true;
+        const chunk =
+            decoder.decode(value, { stream: true });
 
-updateComposer();
-showThinking();
+        const pieces =
+            parseStreamChunk(chunk);
 
-try {
-    const data = await sendToServer(
-        conversation,
-        text
-    );
+        for (const piece of pieces) {
+            if (!piece) continue;
 
-    const responseText =
-        data.response ??
-        data.message ??
-        data.content ??
-        "Beam returned an empty response.";
+            fullText += piece;
+            body.textContent = fullText;
 
-    conversation.messages.push({
-        role: "assistant",
-        content: String(responseText),
-        timestamp: Date.now()
-    });
+            scrollToBottom();
+        }
+    }
 
-    conversation.updatedAt = Date.now();
-
-    saveConversations();
-    renderConversationList();
-    renderChat();
-} catch (error) {
-    removeThinking();
+    if (!fullText.trim()) {
+        fullText = "Beam returned an empty response.";
+        body.textContent = fullText;
+    }
 
     conversation.messages.push({
         role: "assistant",
-        content:
-            `I couldn't reach the Beam server.\n\n${error.message}`,
-        timestamp: Date.now()
+        content: fullText,
+        model: model
     });
 
-    conversation.updatedAt = Date.now();
-
     saveConversations();
-    renderConversationList();
-    renderChat();
-
-    showToast("Beam server connection failed");
-} finally {
-    thinking = false;
-
-    updateComposer();
-    messageInput.focus();
 }
-```
 
+function parseStreamChunk(chunk) {
+    const output = [];
+
+    const lines = chunk.split("\n");
+
+    for (let line of lines) {
+        line = line.trim();
+
+        if (!line) continue;
+
+        if (line.startsWith("data:")) {
+            line = line.substring(5).trim();
+        }
+
+        if (!line) continue;
+        if (line === "[DONE]") continue;
+
+        try {
+            const parsed = JSON.parse(line);
+
+            if (typeof parsed === "string") {
+                output.push(parsed);
+            } else if (parsed.token) {
+                output.push(parsed.token);
+            } else if (parsed.text) {
+                output.push(parsed.text);
+            } else if (parsed.response) {
+                output.push(parsed.response);
+            }
+        } catch {
+            output.push(line);
+        }
+    }
+
+    return output;
+}
+
+function updateGeneratingState() {
+    const sendButton =
+        document.getElementById("sendButton");
+
+    const input =
+        document.getElementById("messageInput");
+
+    sendButton.disabled =
+        generating || !input.value.trim();
+
+    if (generating) {
+        input.placeholder = "Beam is generating...";
+    } else {
+        input.placeholder = "Message Beam...";
+    }
+}
+
+function updateSendButton() {
+    const input =
+        document.getElementById("messageInput");
+
+    const button =
+        document.getElementById("sendButton");
+
+    button.disabled =
+        generating || !input.value.trim();
+}
+
+function resizeTextarea() {
+    const input =
+        document.getElementById("messageInput");
+
+    input.style.height = "auto";
+
+    input.style.height =
+        Math.min(input.scrollHeight, 180) + "px";
+}
+
+function scrollToBottom() {
+    const chat = document.getElementById("chat");
+
+    requestAnimationFrame(() => {
+        chat.scrollTop = chat.scrollHeight;
+    });
 }
 
 function newChat() {
-createConversation();
-messageInput.focus();
+    if (generating) return;
+
+    createConversation();
+    renderConversations();
+    renderMessages();
+
+    document.getElementById("messageInput").focus();
 }
 
-function clearCurrentConversation() {
-const conversation = getActiveConversation();
+function showToast(message) {
+    const toast =
+        document.getElementById("toast");
 
-```
-if (!conversation) {
-    return;
+    toast.textContent = message;
+    toast.classList.add("show");
+
+    clearTimeout(showToast.timeout);
+
+    showToast.timeout = setTimeout(() => {
+        toast.classList.remove("show");
+    }, 2500);
 }
 
-conversation.messages = [];
-conversation.title = "New conversation";
-conversation.updatedAt = Date.now();
-conversation.sessionId = null;
+function openModal() {
+    if (generating) return;
 
-saveConversations();
+    updateModelUI();
 
-renderConversationList();
-renderChat();
-
-showToast("Conversation cleared");
-```
-
+    document
+        .getElementById("modalBackdrop")
+        .classList.add("show");
 }
 
-function exportConversation() {
-const conversation = getActiveConversation();
-
-```
-if (!conversation || conversation.messages.length === 0) {
-    showToast("Nothing to export");
-    return;
+function closeModal() {
+    document
+        .getElementById("modalBackdrop")
+        .classList.remove("show");
 }
-```
+
+function openSidebar() {
+    document
+        .getElementById("sidebar")
+        .classList.add("open");
+
+    document
+        .getElementById("mobileOverlay")
+        .classList.add("show");
+}
+
+function closeSidebar() {
+    document
+        .getElementById("sidebar")
+        .classList.remove("open");
+
+    document
+        .getElementById("mobileOverlay")
+        .classList.remove("show");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    updateModelUI();
+
+    renderConversations();
+
+    if (!activeConversationId) {
+        createConversation();
+    }
+
+    renderConversations();
+    renderMessages();
+
+    const input =
+        document.getElementById("messageInput");
+
+    input.addEventListener("input", () => {
+        resizeTextarea();
+        updateSendButton();
+    });
+
+    input.addEventListener("keydown", event => {
+        if (
+            event.key === "Enter" &&
+            !event.shiftKey
+        ) {
+            event.preventDefault();
+
+            if (!generating) {
+                sendMessage();
+            }
+        }
+    });
+
+    document
+        .getElementById("sendButton")
+        .addEventListener("click", sendMessage);
+
+    document
+        .getElementById("newChat")
+        .addEventListener("click", newChat);
+
+    document
+        .getElementById("menuButton")
+        .addEventListener("click", openSidebar);
+
+    document
+        .getElementById("mobileOverlay")
+        .addEventListener("click", closeSidebar);
+
+    document
+        .getElementById("modelSelector")
+        .addEventListener("click", event => {
+            event.stopPropagation();
+
+            if (
+                event.target.closest(".model-option")
+            ) {
+                setModel(
+                    event.target.closest(".model-option")
+                        .dataset.model
+                );
+                return;
+            }
+
+            const selector =
+                document.getElementById("modelSelector");
+
+            if (selector.classList.contains("open")) {
+                closeModelMenu();
+            } else {
+                openModelMenu();
+            }
+        });
+
+    document
+        .getElementById("mobileModelButton")
+        .addEventListener("click", openModal);
+
+    document
+        .getElementById("modalClose")
+        .addEventListener("click", closeModal);
+
+    document
+        .getElementById("modalDone")
+        .addEventListener("click", closeModal);
+
+    document
+        .getElementById("modalBackdrop")
+        .addEventListener("click", event => {
+            if (event.target.id === "modalBackdrop") {
+                closeModal();
+            }
+        });
+
+    document.addEventListener("click", event => {
+        const selector =
+            document.getElementById("modelSelector");
+
+        if (!selector.contains(event.target)) {
+            closeModelMenu();
+        }
+    });
+
+    updateSendButton();
+});
