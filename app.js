@@ -1140,7 +1140,7 @@ if (!activeConversationId) {
 resizeInput();
 updateComposer();
 updateScrollButton();
-```
+
 
 }
 
