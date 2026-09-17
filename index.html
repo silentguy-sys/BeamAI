@@ -63,19 +63,16 @@
             </div>
 
             <div class="sidebar-bottom">
-                <button class="model-card" id="modelSelector" type="button">
+                <div class="model-card">
                     <div class="model-card-logo">
                         <img src="./beamlogo1.png" alt="Beam">
                     </div>
-
                     <div class="model-card-info">
-                        <strong id="modelCardName">Beam 1</strong>
-                        <span id="modelCardStatus">8B · Main · GPU</span>
+                        <strong>Beam o2</strong>
+                        <span>Online</span>
                     </div>
-
-                    <span class="model-selector-arrow">⌄</span>
                     <span class="online-dot"></span>
-                </button>
+                </div>
 
                 <div class="sidebar-links">
                     <button id="modelInfoButton">Model info</button>
@@ -95,11 +92,10 @@
                     </div>
 
                     <div class="model-title">
-                        <strong id="modelTitle">Beam 1</strong>
-
+                        <strong>Beam o2</strong>
                         <span class="status-pill">
                             <span class="status-dot"></span>
-                            <span id="modelStatus">Online</span>
+                            Online
                         </span>
                     </div>
                 </div>
@@ -108,7 +104,6 @@
                     <button class="topbar-button" id="exportButton" title="Export conversation">
                         ⇩
                     </button>
-
                     <button class="topbar-button" id="clearButton" title="Clear conversation">
                         ⌫
                     </button>
@@ -145,7 +140,6 @@
 
     <div class="modal hidden" id="modal">
         <div class="modal-backdrop"></div>
-
         <div class="modal-card">
             <button class="modal-close" id="modalClose">×</button>
             <div id="modalContent"></div>
