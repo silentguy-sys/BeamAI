@@ -1,4 +1,4 @@
-const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net/";
+const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
 
 const STORAGE_KEY = "beam_conversations_v2";
 const ACTIVE_KEY = "beam_active_conversation_v2";
