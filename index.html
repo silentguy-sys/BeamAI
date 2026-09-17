@@ -1,136 +1,159 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b0d12">
+    <meta name="description" content="Beam AI">
+    <link rel="icon" type="image/png" href="./beamlogo1.png">
+    <link rel="stylesheet" href="./style.css">
     <title>Beam</title>
-    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
     <div class="app">
 
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top">
                 <div class="brand">
-                    <div class="brand-icon">B</div>
-                    <div>
-                        <div class="brand-name">Beam</div>
-                        <div class="brand-subtitle">Local AI</div>
+                    <div class="brand-logo">
+                        <img src="./beamlogo1.png" alt="Beam">
+                    </div>
+                    <div class="brand-text">
+                        <strong>Beam</strong>
+                        <span>AI assistant</span>
                     </div>
                 </div>
 
-                <button class="new-chat" id="newChat">
-                    <span>＋</span>
+                <button class="new-chat" id="newChatButton">
+                    <span class="new-chat-icon">＋</span>
                     <span>New chat</span>
+                    <span class="new-chat-key">N</span>
                 </button>
+
+                <div class="sidebar-search">
+                    <span>⌕</span>
+                    <input id="chatSearch" type="text" placeholder="Search chats">
+                </div>
+
+                <div class="sidebar-nav">
+                    <button class="nav-button active" data-view="chats">
+                        <span>▤</span>
+                        <span>Chats</span>
+                    </button>
+
+                    <button class="nav-button" data-view="recents">
+                        <span>◷</span>
+                        <span>Recents</span>
+                    </button>
+                </div>
             </div>
 
-            <div class="conversation-list" id="conversationList"></div>
+            <div class="conversation-area">
+                <div class="conversation-heading">
+                    <span id="conversationHeading">Today</span>
+                    <span id="conversationCount">0</span>
+                </div>
+
+                <div id="conversationList" class="conversation-list"></div>
+
+                <div id="emptyConversations" class="empty-conversations">
+                    <div class="empty-icon">◌</div>
+                    <span>No conversations yet</span>
+                </div>
+            </div>
 
             <div class="sidebar-bottom">
-                <div class="model-selector" id="modelSelector">
-                    <div class="model-selector-main">
-                        <div class="model-icon">✦</div>
-
-                        <div class="model-info">
-                            <div class="model-name" id="sidebarModelName">Beam 1</div>
-                            <div class="model-status" id="sidebarModelStatus">
-                                8B · Main / GPU
-                            </div>
-                        </div>
-
-                        <div class="model-chevron">⌄</div>
+                <button class="model-card" id="modelSelector" type="button">
+                    <div class="model-card-logo">
+                        <img src="./beamlogo1.png" alt="Beam">
                     </div>
 
-                    <div class="model-menu" id="modelMenu">
-                        <button class="model-option active" data-model="beam-1">
-                            <div class="option-icon">✦</div>
-                            <div class="option-info">
-                                <div class="option-name">Beam 1</div>
-                                <div class="option-description">8B · Main / GPU</div>
-                            </div>
-                            <div class="option-check">✓</div>
-                        </button>
-
-                        <button class="model-option" data-model="beam-o2">
-                            <div class="option-icon">◈</div>
-                            <div class="option-info">
-                                <div class="option-name">Beam o2</div>
-                                <div class="option-description">1.5B · Lightweight / CPU</div>
-                            </div>
-                            <div class="option-check">✓</div>
-                        </button>
+                    <div class="model-card-info">
+                        <strong id="modelCardName">Beam 1</strong>
+                        <span id="modelCardStatus">8B · Main · GPU</span>
                     </div>
+
+                    <span class="model-selector-arrow">⌄</span>
+                    <span class="online-dot"></span>
+                </button>
+
+                <div class="sidebar-links">
+                    <button id="modelInfoButton">Model info</button>
+                    <button id="policyButton">Policy</button>
                 </div>
             </div>
         </aside>
 
         <main class="main">
-
             <header class="topbar">
-                <button class="menu-button" id="menuButton">☰</button>
+                <div class="topbar-left">
+                    <button class="mobile-menu" id="mobileMenu">☰</button>
 
-                <div class="topbar-model">
-                    <span class="topbar-model-icon">✦</span>
-                    <span id="topbarModelName">Beam 1</span>
+                    <div class="mobile-brand">
+                        <img src="./beamlogo1.png" alt="Beam">
+                        <span>Beam</span>
+                    </div>
+
+                    <div class="model-title">
+                        <strong id="modelTitle">Beam 1</strong>
+
+                        <span class="status-pill">
+                            <span class="status-dot"></span>
+                            <span id="modelStatus">Online</span>
+                        </span>
+                    </div>
                 </div>
 
-                <button class="mobile-model-button" id="mobileModelButton">
-                    ✦
-                </button>
+                <div class="topbar-actions">
+                    <button class="topbar-button" id="exportButton" title="Export conversation">
+                        ⇩
+                    </button>
+
+                    <button class="topbar-button" id="clearButton" title="Clear conversation">
+                        ⌫
+                    </button>
+                </div>
             </header>
 
-            <section class="chat" id="chat">
-                <div class="welcome" id="welcome">
-                    <div class="welcome-icon">✦</div>
-                    <h1>How can I help?</h1>
-                    <p>Beam is ready.</p>
-                </div>
+            <section class="chat-shell">
+                <div id="chatArea" class="chat-area"></div>
+
+                <div class="scroll-bottom" id="scrollBottom">↓</div>
             </section>
 
-            <div class="composer-area">
+            <footer class="composer-wrap">
                 <div class="composer">
                     <textarea
                         id="messageInput"
-                        placeholder="Message Beam..."
                         rows="1"
-                        autocomplete="off"
+                        maxlength="12000"
+                        placeholder="Message Beam..."
                     ></textarea>
 
-                    <button class="send-button" id="sendButton" disabled>
-                        ↑
+                    <button id="sendButton" class="send-button" disabled>
+                        <span>↑</span>
                     </button>
                 </div>
 
-                <div class="composer-note">
-                    Beam can make mistakes. Check important information.
+                <div class="composer-footer">
+                    <span>Beam can make mistakes. Check important information.</span>
+                    <span>Enter to send · Shift + Enter for new line</span>
                 </div>
-            </div>
+            </footer>
         </main>
     </div>
 
-    <div class="mobile-overlay" id="mobileOverlay"></div>
+    <div class="modal hidden" id="modal">
+        <div class="modal-backdrop"></div>
 
-    <div class="modal-backdrop" id="modalBackdrop">
-        <div class="modal" id="modal">
+        <div class="modal-card">
             <button class="modal-close" id="modalClose">×</button>
-
-            <div class="modal-icon">✦</div>
-            <h2 id="modalTitle">Beam 1</h2>
-            <p id="modalDescription">
-                Qwen3-8B · 4-bit NF4 · GPU/RAM offload
-            </p>
-
-            <button class="modal-done" id="modalDone">
-                Done
-            </button>
+            <div id="modalContent"></div>
         </div>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <div class="toast-container" id="toastContainer"></div>
 
-    <script src="app.js"></script>
+    <script src="./app.js"></script>
 </body>
 </html>
