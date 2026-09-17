@@ -1,6 +1,20 @@
+
 const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
+
 const STORAGE_KEY = "beam_conversations_v2";
 const ACTIVE_KEY = "beam_active_conversation_v2";
+const MODEL_KEY = "beam_selected_model_v1";
+
+const MODELS = {
+    "beam-1": {
+        name: "Beam 1",
+        description: "Beam's main AI model."
+    },
+    "beam-o2": {
+        name: "Beam o2",
+        description: "Beam's lightweight AI model."
+    }
+};
 
 const chatArea = document.getElementById("chatArea");
 const messageInput = document.getElementById("messageInput");
@@ -21,8 +35,17 @@ const modalClose = document.getElementById("modalClose");
 const modalContent = document.getElementById("modalContent");
 const toastContainer = document.getElementById("toastContainer");
 
+const modelSelector = document.getElementById("modelSelector");
+const modelMenu = document.getElementById("modelMenu");
+const modelOptions = document.querySelectorAll(".model-option");
+const selectedModelName = document.getElementById("selectedModelName");
+const topModelName = document.getElementById("topModelName");
+const mobileModelName = document.getElementById("mobileModelName");
+const mobileModelButton = document.getElementById("mobileModelButton");
+
 let conversations = loadConversations();
 let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
+let selectedModel = loadSelectedModel();
 let currentView = "chats";
 let thinking = false;
 
@@ -37,6 +60,45 @@ function loadConversations() {
 
 function saveConversations() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+}
+
+function loadSelectedModel() {
+    const saved = localStorage.getItem(MODEL_KEY);
+    return MODELS[saved] ? saved : "beam-1";
+}
+
+function setSelectedModel(model) {
+    if (!MODELS[model] || thinking) return;
+
+    selectedModel = model;
+    localStorage.setItem(MODEL_KEY, selectedModel);
+
+    updateModelUI();
+    closeModelMenu();
+}
+
+function updateModelUI() {
+    const model = MODELS[selectedModel];
+
+    selectedModelName.textContent = model.name;
+    topModelName.textContent = model.name;
+    mobileModelName.textContent = model.name;
+
+    modelOptions.forEach(option => {
+        option.classList.toggle(
+            "active",
+            option.dataset.model === selectedModel
+        );
+    });
+}
+
+function toggleModelMenu() {
+    if (thinking) return;
+    modelMenu.classList.toggle("hidden");
+}
+
+function closeModelMenu() {
+    modelMenu.classList.add("hidden");
 }
 
 function createConversation() {
@@ -106,7 +168,7 @@ async function ensureSession(conversation) {
     return await createSession(conversation);
 }
 
-async function sendToServer(conversation, message) {
+async function sendToServer(conversation, message, model) {
     let sessionId = await ensureSession(conversation);
 
     let response = await fetch(`${API_URL}/chat`, {
@@ -116,7 +178,8 @@ async function sendToServer(conversation, message) {
         },
         body: JSON.stringify({
             session_id: sessionId,
-            message
+            message,
+            model
         })
     });
 
@@ -133,7 +196,8 @@ async function sendToServer(conversation, message) {
             },
             body: JSON.stringify({
                 session_id: sessionId,
-                message
+                message,
+                model
             })
         });
     }
@@ -251,9 +315,7 @@ function renderConversationList() {
 
         const time = document.createElement("div");
         time.className = "conversation-time";
-        time.textContent = formatConversationTime(
-            conversation.updatedAt
-        );
+        time.textContent = formatConversationTime(conversation.updatedAt);
 
         content.appendChild(title);
         content.appendChild(time);
@@ -281,7 +343,6 @@ function renderConversationList() {
 
 function deleteConversation(id) {
     conversations = conversations.filter(c => c.id !== id);
-
     saveConversations();
 
     if (activeConversationId === id) {
@@ -302,6 +363,8 @@ function deleteConversation(id) {
 }
 
 function openConversation(id) {
+    if (thinking) return;
+
     const conversation = conversations.find(c => c.id === id);
 
     if (!conversation) return;
@@ -315,7 +378,7 @@ function openConversation(id) {
     sidebar.classList.remove("open");
 }
 
-function addMessageElement(role, content, timestamp) {
+function addMessageElement(role, content, timestamp, model) {
     const message = document.createElement("div");
     message.className = `message ${role}`;
 
@@ -340,7 +403,9 @@ function addMessageElement(role, content, timestamp) {
 
     const name = document.createElement("span");
     name.className = "message-name";
-    name.textContent = role === "assistant" ? "Beam" : "You";
+    name.textContent = role === "assistant"
+        ? (MODELS[model]?.name || "Beam")
+        : "You";
 
     const time = document.createElement("span");
     time.className = "message-time";
@@ -367,7 +432,6 @@ function addMessageElement(role, content, timestamp) {
         copy.addEventListener("click", async () => {
             try {
                 await navigator.clipboard.writeText(content);
-
                 copy.textContent = "Copied";
 
                 setTimeout(() => {
@@ -475,7 +539,8 @@ function renderChat() {
             addMessageElement(
                 message.role,
                 message.content,
-                message.timestamp
+                message.timestamp,
+                message.model
             )
         );
     }
@@ -489,10 +554,11 @@ function renderChat() {
     updateComposer();
 }
 
-function showThinking() {
+function showThinking(model) {
     removeThinking();
 
     const list = getMessageList();
+    const modelName = MODELS[model]?.name || "Beam";
 
     const thinkingElement = document.createElement("div");
     thinkingElement.className = "thinking";
@@ -505,7 +571,7 @@ function showThinking() {
 
         <div class="thinking-content">
             <div class="thinking-header">
-                <span>Beam</span>
+                <span>${modelName}</span>
             </div>
 
             <div class="thinking-dots">
@@ -545,6 +611,8 @@ async function sendMessage() {
     if (!text || thinking) return;
 
     const conversation = ensureActiveConversation();
+
+    const modelUsed = selectedModel;
     const timestamp = Date.now();
 
     conversation.messages.push({
@@ -571,10 +639,14 @@ async function sendMessage() {
 
     thinking = true;
     updateComposer();
-    showThinking();
+    showThinking(modelUsed);
 
     try {
-        const data = await sendToServer(conversation, text);
+        const data = await sendToServer(
+            conversation,
+            text,
+            modelUsed
+        );
 
         const responseText =
             data.response ??
@@ -585,7 +657,8 @@ async function sendMessage() {
         conversation.messages.push({
             role: "assistant",
             content: String(responseText),
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            model: modelUsed
         });
 
         conversation.updatedAt = Date.now();
@@ -618,11 +691,15 @@ async function sendMessage() {
 }
 
 function newChat() {
+    if (thinking) return;
+
     createConversation();
     messageInput.focus();
 }
 
 function clearCurrentConversation() {
+    if (thinking) return;
+
     const conversation = getActiveConversation();
 
     if (!conversation) return;
@@ -659,7 +736,9 @@ function exportConversation() {
 
     for (const message of conversation.messages) {
         const speaker =
-            message.role === "assistant" ? "Beam" : "You";
+            message.role === "assistant"
+                ? (MODELS[message.model]?.name || "Beam")
+                : "You";
 
         lines.push(
             `${speaker} — ${new Date(message.timestamp).toLocaleString()}`,
@@ -692,18 +771,16 @@ function openModal(type) {
     modal.classList.remove("hidden");
 
     if (type === "model") {
+        const model = MODELS[selectedModel];
+
         modalContent.innerHTML = `
             <div class="modal-content">
                 <img class="modal-logo" src="./beamlogo1.png" alt="Beam">
-                <h2>Beam o2</h2>
+                <h2>${model.name}</h2>
+                <p>${model.description}</p>
                 <p>
-                    Beam o2 is the current Mini-series Beam model.
-                    The web interface connects to your Beam server,
-                    which handles model inference and conversation sessions.
-                </p>
-                <p>
-                    This interface is currently running through your
-                    Tailscale Funnel connection.
+                    Beam connects to the Beam server for model inference
+                    and conversation sessions.
                 </p>
             </div>
         `;
@@ -769,11 +846,9 @@ messageInput.addEventListener("keydown", event => {
 });
 
 sendButton.addEventListener("click", sendMessage);
-
 newChatButton.addEventListener("click", newChat);
 
 clearButton.addEventListener("click", clearCurrentConversation);
-
 exportButton.addEventListener("click", exportConversation);
 
 scrollBottom.addEventListener("click", () => {
@@ -784,11 +859,34 @@ scrollBottom.addEventListener("click", () => {
 });
 
 chatArea.addEventListener("scroll", updateScrollButton);
-
 chatSearch.addEventListener("input", renderConversationList);
 
 mobileMenu.addEventListener("click", () => {
     sidebar.classList.toggle("open");
+});
+
+modelSelector.addEventListener("click", event => {
+    event.stopPropagation();
+    toggleModelMenu();
+});
+
+mobileModelButton.addEventListener("click", event => {
+    event.stopPropagation();
+    sidebar.classList.toggle("open");
+});
+
+modelOptions.forEach(option => {
+    option.addEventListener("click", event => {
+        event.stopPropagation();
+        setSelectedModel(option.dataset.model);
+    });
+});
+
+document.addEventListener("click", event => {
+    if (!modelMenu.contains(event.target) &&
+        event.target !== modelSelector) {
+        closeModelMenu();
+    }
 });
 
 document.querySelectorAll(".nav-button").forEach(button => {
@@ -822,6 +920,7 @@ modal.querySelector(".modal-backdrop").addEventListener(
 document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
         closeModal();
+        closeModelMenu();
     }
 
     if (
@@ -835,6 +934,8 @@ document.addEventListener("keydown", event => {
         newChat();
     }
 });
+
+updateModelUI();
 
 if (conversations.length === 0) {
     createConversation();
