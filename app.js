@@ -836,68 +836,104 @@ if (conversations.length === 0) {
 }
 function parseMarkdown(text) {
     if (!text) return "";
-
-    // 1. Escape HTML to prevent rendering bugs and XSS
-    let html = text
+    
+    // 1. แปลงอักขระพิเศษเพื่อป้องกันบั๊ก HTML เด้งและ XSS
+    var escaped = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+        
+    var lines = escaped.split("\n");
+    var result = [];
+    var inCodeBlock = false;
+    var codeContent = [];
+    var codeLang = "code";
 
-    // 2. Beautiful Code blocks with copy buttons (No backtick bugs)
-    html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, function(match, lang, code) {
-        let displayLang = lang || 'code';
-        return '<div class="code-block-container">' +
-                    '<div class="code-block-header">' +
-                        '<span class="code-block-lang">' + displayLang + '</span>' +
-                        '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
-                    '</div>' +
-                    '<pre><code class="language-' + displayLang + '">' + code + '</code></pre>' +
-               '</div>';
-    });
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
 
-    // 3. Inline code (`variable`)
-    html = html.replace(/`([^`\n]+)`/g, '<code>\$1</code>');
-
-    // 4. Bold (**text**)
-    html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>\$1</strong>');
-
-    // 5. Italics (*text*)
-    html = html.replace(/\*([\s\S]*?)\*/g, '<em>\$1</em>');
-
-    // 6. Safe Line-by-Line processing for Headings and Bullet lists
-    let lines = html.split('\n');
-    let isInsidePre = false;
-
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-
-        // Track if we are inside a code block so we don't accidentally parse code symbols
-        if (line.includes('<pre>')) isInsidePre = true;
-        if (line.includes('</pre>')) {
-            isInsidePre = false;
+        // ตรวจสอบ Markdown Code Blocks (```)
+        if (line.trim().indexOf("```") === 0) {
+            if (!inCodeBlock) {
+                inCodeBlock = true;
+                codeLang = line.trim().slice(3).trim() || "code";
+                codeContent = [];
+            } else {
+                inCodeBlock = false;
+                var blockHtml = '<div class="code-block-container">' +
+                                    '<div class="code-block-header">' +
+                                        '<span class="code-block-lang">' + codeLang + '</span>' +
+                                        '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
+                                    '</div>' +
+                                    '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
+                                '</div>';
+                result.push(blockHtml);
+            }
             continue;
         }
-        if (isInsidePre) continue; 
 
-        let trimmed = line.trim();
+        // ถ้าอยู่ข้างใน code block ให้เก็บเนื้อหาไว้
+        if (inCodeBlock) {
+            codeContent.push(line);
+            continue;
+        }
 
-        // Headings (.trim() completely fixes the streaming ### bug)
-        if (trimmed.startsWith('### ')) {
-            lines[i] = '<h3>' + trimmed.slice(4) + '</h3>';
-        } else if (trimmed.startsWith('## ')) {
-            lines[i] = '<h2>' + trimmed.slice(3) + '</h2>';
-        } else if (trimmed.startsWith('# ')) {
-            lines[i] = '<h1>' + trimmed.slice(2) + '</h1>';
+        var trimmed = line.trim();
+
+        // 2. แปลงหัวข้อ Headings (###) - ใช้ indexOf แทนเพื่อความเข้ากันได้สูง
+        if (trimmed.indexOf("### ") === 0) {
+            line = "<h3>" + trimmed.slice(4) + "</h3>";
+        } else if (trimmed.indexOf("## ") === 0) {
+            line = "<h2>" + trimmed.slice(3) + "</h2>";
+        } else if (trimmed.indexOf("# ") === 0) {
+            line = "<h1>" + trimmed.slice(2) + "</h1>";
         }
-        
-        // Bullet Points
-        if (trimmed.startsWith('- ')) {
-            lines[i] = '<li>' + trimmed.slice(2) + '</li>';
+
+        // 3. แปลง Bullet lists (- )
+        if (trimmed.indexOf("- ") === 0) {
+            line = "<li>" + trimmed.slice(2) + "</li>";
         }
+
+        // 4. แปลงสไตล์อักษรทั่วไป (Bold, Italics, Inline labels)
+        line = line.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>\$1</strong>");
+        line = line.replace(/\*([\s\S]*?)\*/g, "<em>\$1</em>");
+        line = line.replace(/`([^`\n]+)`/g, "<code>\$1</code>");
+
+        result.push(line);
     }
 
-    return lines.join('\n');
+    // กรณีที่สตรีมมิ่งข้อความยังไม่จบ (ยังไม่มีปิด ```) ให้แสดงกล่องรอไว้เลยเพื่อความสวยงาม
+    if (inCodeBlock && codeContent.length > 0) {
+        var ongoingBlockHtml = '<div class="code-block-container">' +
+                            '<div class="code-block-header">' +
+                                '<span class="code-block-lang">' + codeLang + '</span>' +
+                                '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
+                            '</div>' +
+                            '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
+                        '</div>';
+        result.push(ongoingBlockHtml);
+    }
+
+    return result.join("\n");
 }
+
+// ฟังก์ชันคัดลอกโค้ดสำหรับปุ่ม Copy
+window.copyCodeSnippet = function(button) {
+    var container = button.closest('.code-block-container');
+    var codeText = container.querySelector('code').textContent;
+
+    navigator.clipboard.writeText(codeText).then(function() {
+        button.textContent = "Copied!";
+        button.classList.add('copied');
+        setTimeout(function() {
+            button.textContent = "Copy";
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(function() {
+        button.textContent = "Failed";
+    });
+};
+
 
 // Global helper function to handle the copy button action
 window.copyCodeSnippet = function(button) {
