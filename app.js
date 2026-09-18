@@ -349,7 +349,7 @@ function addMessageElement(role, content, timestamp, model) {
 
     const text = document.createElement("div");
     text.className = "message-content";
-    text.innerHTML = parseMarkdown(content);
+    text.textContent = content;
 
     body.appendChild(header);
     body.appendChild(text);
@@ -599,13 +599,13 @@ async function sendMessage() {
             }
             const chunk = decoder.decode(value, { stream: true });
             fullResponseText += chunk;
-            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
+            assistantTextNode.textContent = fullResponseText;
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
         if (!fullResponseText) {
             fullResponseText = "Beam returned an empty response.";
-            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
+            assistantTextNode.textContent = fullResponseText;
         }
 
         conversation.messages.push({
@@ -833,143 +833,6 @@ if (conversations.length === 0) {
     }
     renderConversationList();
     renderChat();
-}
-function parseMarkdown(text) {
-    if (!text) return "";
-    
-    // 1. แปลงอักขระพิเศษเพื่อป้องกันบั๊ก HTML เด้งและ XSS
-    var escaped = text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-        
-    var lines = escaped.split("\n");
-    var result = [];
-    var inCodeBlock = false;
-    var codeContent = [];
-    var codeLang = "code";
-
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-
-        // ตรวจสอบ Markdown Code Blocks (```)
-        if (line.trim().indexOf("```") === 0) {
-            if (!inCodeBlock) {
-                inCodeBlock = true;
-                codeLang = line.trim().slice(3).trim() || "code";
-                codeContent = [];
-            } else {
-                inCodeBlock = false;
-                var blockHtml = '<div class="code-block-container">' +
-                                    '<div class="code-block-header">' +
-                                        '<span class="code-block-lang">' + codeLang + '</span>' +
-                                        '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
-                                    '</div>' +
-                                    '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
-                                '</div>';
-                result.push(blockHtml);
-            }
-            continue;
-        }
-
-        // ถ้าอยู่ข้างใน code block ให้เก็บเนื้อหาไว้
-        if (inCodeBlock) {
-            codeContent.push(line);
-            continue;
-        }
-
-        var trimmed = line.trim();
-
-        // 2. แปลงหัวข้อ Headings (###) - ใช้ indexOf แทนเพื่อความเข้ากันได้สูง
-        if (trimmed.indexOf("### ") === 0) {
-            line = "<h3>" + trimmed.slice(4) + "</h3>";
-        } else if (trimmed.indexOf("## ") === 0) {
-            line = "<h2>" + trimmed.slice(3) + "</h2>";
-        } else if (trimmed.indexOf("# ") === 0) {
-            line = "<h1>" + trimmed.slice(2) + "</h1>";
-        }
-
-        // 3. แปลง Bullet lists (- )
-        if (trimmed.indexOf("- ") === 0) {
-            line = "<li>" + trimmed.slice(2) + "</li>";
-        }
-
-        // 4. แปลงสไตล์อักษรทั่วไป (Bold, Italics, Inline labels)
-        line = line.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>\$1</strong>");
-        line = line.replace(/\*([\s\S]*?)\*/g, "<em>\$1</em>");
-        line = line.replace(/`([^`\n]+)`/g, "<code>\$1</code>");
-
-        result.push(line);
-    }
-
-    // กรณีที่สตรีมมิ่งข้อความยังไม่จบ (ยังไม่มีปิด ```) ให้แสดงกล่องรอไว้เลยเพื่อความสวยงาม
-    if (inCodeBlock && codeContent.length > 0) {
-        var ongoingBlockHtml = '<div class="code-block-container">' +
-                            '<div class="code-block-header">' +
-                                '<span class="code-block-lang">' + codeLang + '</span>' +
-                                '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
-                            '</div>' +
-                            '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
-                        '</div>';
-        result.push(ongoingBlockHtml);
-    }
-
-    return result.join("\n");
-}
-
-// ฟังก์ชันคัดลอกโค้ดสำหรับปุ่ม Copy
-window.copyCodeSnippet = function(button) {
-    var container = button.closest('.code-block-container');
-    var codeText = container.querySelector('code').textContent;
-
-    navigator.clipboard.writeText(codeText).then(function() {
-        button.textContent = "Copied!";
-        button.classList.add('copied');
-        setTimeout(function() {
-            button.textContent = "Copy";
-            button.classList.remove('copied');
-        }, 2000);
-    }).catch(function() {
-        button.textContent = "Failed";
-    });
-};
-
-
-// Global helper function to handle the copy button action
-window.copyCodeSnippet = function(button) {
-    let container = button.closest('.code-block-container');
-    let codeText = container.querySelector('code').textContent;
-
-    navigator.clipboard.writeText(codeText).then(function() {
-        button.textContent = "Copied!";
-        button.classList.add('copied');
-        setTimeout(function() {
-            button.textContent = "Copy";
-            button.classList.remove('copied');
-        }, 2000);
-    }).catch(function() {
-        button.textContent = "Failed";
-    });
-};
-
-// Global helper function to handle the copy button action
-window.copyCodeSnippet = function(button) {
-    const container = button.closest('.code-block-container');
-    const codeText = container.querySelector('code').textContent;
-
-    navigator.clipboard.writeText(codeText).then(() => {
-        button.textContent = "Copied!";
-        button.classList.add('copied');
-        setTimeout(() => {
-            button.textContent = "Copy";
-            button.classList.remove('copied');
-        }, 2000);
-    }).catch(() => {
-        button.textContent = "Failed";
-    });
-};
-
-    return html;
 }
 
 updateComposer();
