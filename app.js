@@ -835,5 +835,40 @@ if (conversations.length === 0) {
     renderChat();
 }
 
+function parseMarkdown(text) {
+    // 1. Escape HTML to prevent cross-site scripting (XSS)
+    let html = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    // 2. Code blocks (```lua ... ```)
+    html = html.replace(/```(?:[a-zA-Z0-9]+)?([\s\S]*?)```/g, '<pre><code>\$1</code></pre>');
+
+    // 3. Inline code (`variable`)
+    html = html.replace(/`([^`]+)`/g, '<code>\$1</code>');
+
+    // 4. Headers (### Heading)
+    html = html.replace(/^###\s+(.*)\$/gim, '<h3>\$1</h3>');
+    html = html.replace(/^##\s+(.*)\$/gim, '<h2>\$1</h2>');
+    html = html.replace(/^#\s+(.*)\$/gim, '<h1>\$1</h1>');
+
+    // 5. Bold (**text**)
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>\$1</strong>');
+
+    // 6. Italics (*text*)
+    html = html.replace(/\*([^*]+)\*/g, '<em>\$1</em>');
+
+    // 7. Bullet points (- item)
+    html = html.split('\n').map(line => {
+        if (line.trim().startsWith('- ')) {
+            return `<li>${line.trim().substring(2)}</li>`;
+        }
+        return line;
+    }).join('\n');
+
+    return html;
+}
+
 updateComposer();
 resizeInput();
