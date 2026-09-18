@@ -1,3 +1,84 @@
+function parseMarkdown(text) {
+    if (!text) return "";
+    var escaped = text
+        .replace(/&/g, "&amp;")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    var lines = escaped.split("\n");
+    var result = [];
+    var inCodeBlock = false;
+    var codeContent = [];
+    var codeLang = "code";
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        if (line.trim().indexOf("```") === 0) {
+            if (!inCodeBlock) {
+                inCodeBlock = true;
+                codeLang = line.trim().slice(3).trim() || "code";
+                codeContent = [];
+            } else {
+                inCodeBlock = false;
+                var blockHtml = '<div class="code-block-container">' +
+                                    '<div class="code-block-header">' +
+                                        '<span class="code-block-lang">' + codeLang + '</span>' +
+                                        '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
+                                    '</div>' +
+                                    '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
+                                '</div>';
+                result.push(blockHtml);
+            }
+            continue;
+        }
+        if (inCodeBlock) {
+            codeContent.push(line);
+            continue;
+        }
+        var trimmed = line.trim();
+        if (trimmed.indexOf("### ") === 0) {
+            line = "<h3>" + trimmed.slice(4) + "</h3>";
+        } else if (trimmed.indexOf("## ") === 0) {
+            line = "<h2>" + trimmed.slice(3) + "</h2>";
+        } else if (trimmed.indexOf("# ") === 0) {
+            line = "<h1>" + trimmed.slice(2) + "</h1>";
+        }
+        if (trimmed.indexOf("- ") === 0) {
+            line = "<li>" + trimmed.slice(2) + "</li>";
+        }
+        line = line.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>$1</strong>");
+        line = line.replace(/\*([\s\S]*?)\*/g, "<em>$1</em>");
+        line = line.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+        result.push(line);
+    }
+    if (inCodeBlock && codeContent.length > 0) {
+        var ongoingBlockHtml = '<div class="code-block-container">' +
+                            '<div class="code-block-header">' +
+                                '<span class="code-block-lang">' + codeLang + '</span>' +
+                                '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
+                            '</div>' +
+                            '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
+                        '</div>';
+        result.push(ongoingBlockHtml);
+    }
+    return result.join("\n");
+}
+
+window.copyCodeSnippet = function(button) {
+    var container = button.closest('.code-block-container');
+    var codeText = container.querySelector('code').textContent;
+    navigator.clipboard.writeText(codeText).then(function() {
+        button.textContent = "Copied!";
+        button.classList.add('copied');
+        setTimeout(function() {
+            button.textContent = "Copy";
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(function() {
+        button.textContent = "Failed";
+    });
+};
+
 const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
 
 const STORAGE_KEY = "beam_conversations_v2";
@@ -349,7 +430,7 @@ function addMessageElement(role, content, timestamp, model) {
 
     const text = document.createElement("div");
     text.className = "message-content";
-    text.textContent = content;
+    text.innerHTML = parseMarkdown(content);
 
     body.appendChild(header);
     body.appendChild(text);
@@ -478,7 +559,7 @@ function showThinking(model) {
         </div>
         <div class="thinking-content">
             <div class="thinking-header">
-                <span>${modelName}</span>
+                <span>` + modelName + `</span>
             </div>
             <div class="thinking-dots">
                 <span></span>
@@ -599,13 +680,13 @@ async function sendMessage() {
             }
             const chunk = decoder.decode(value, { stream: true });
             fullResponseText += chunk;
-            assistantTextNode.textContent = fullResponseText;
+            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
         if (!fullResponseText) {
             fullResponseText = "Beam returned an empty response.";
-            assistantTextNode.textContent = fullResponseText;
+            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
         }
 
         conversation.messages.push({
@@ -711,8 +792,8 @@ function openModal(type) {
         const model = MODELS[selectedModel];
         modalContent.innerHTML = `
             <div class="modal-content">
-                <h2>${model.name}</h2>
-                <p>${model.description}</p>
+                <h2>` + model.name + `</h2>
+                <p>` + model.description + `</p>
                 <p>The selected model is used for new messages in this conversation.</p>
             </div>
         `;
