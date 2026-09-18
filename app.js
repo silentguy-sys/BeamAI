@@ -834,39 +834,48 @@ if (conversations.length === 0) {
     renderConversationList();
     renderChat();
 }
-
 function parseMarkdown(text) {
-    // 1. Escape HTML to prevent cross-site scripting (XSS)
+    // 1. Escape HTML to prevent rendering bugs and XSS
     let html = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
     // 2. Code blocks (```lua ... ```)
-    html = html.replace(/```(?:[a-zA-Z0-9]+)?([\s\S]*?)```/g, '<pre><code>\$1</code></pre>');
+    html = html.replace(/```(?:[a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g, '<pre><code>\$1</code></pre>');
+    html = html.replace(/```(?:[a-zA-Z0-9_-]+)?([\s\S]*?)```/g, '<pre><code>\$1</code></pre>');
 
     // 3. Inline code (`variable`)
-    html = html.replace(/`([^`]+)`/g, '<code>\$1</code>');
+    html = html.replace(/`([^`\n]+)`/g, '<code>\$1</code>');
 
-    // 4. Headers (### Heading)
-    html = html.replace(/^###\s+(.*)\$/gim, '<h3>\$1</h3>');
-    html = html.replace(/^##\s+(.*)\$/gim, '<h2>\$1</h2>');
-    html = html.replace(/^#\s+(.*)\$/gim, '<h1>\$1</h1>');
+    // 4. Bold (**text**)
+    html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>\$1</strong>');
 
-    // 5. Bold (**text**)
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>\$1</strong>');
+    // 5. Italics (*text*)
+    html = html.replace(/\*([\s\S]*?)\*/g, '<em>\$1</em>');
 
-    // 6. Italics (*text*)
-    html = html.replace(/\*([^*]+)\*/g, '<em>\$1</em>');
+    // 6. Line-by-line processing for Headings and Bullet lists
+    let lines = html.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
 
-    // 7. Bullet points (- item)
-    html = html.split('\n').map(line => {
-        if (line.trim().startsWith('- ')) {
-            return `<li>${line.trim().substring(2)}</li>`;
+        // Headings
+        if (line.startsWith('### ')) {
+            lines[i] = `<h3>${line.slice(4)}</h3>`;
+        } else if (line.startsWith('## ')) {
+            lines[i] = `<h2>${line.slice(3)}</h2>`;
+        } else if (line.startsWith('# ')) {
+            lines[i] = `<h1>${line.slice(2)}</h1>`;
         }
-        return line;
-    }).join('\n');
+        
+        // Bullet Points
+        if (line.trim().startsWith('- ')) {
+            lines[i] = `<li>${line.trim().slice(2)}</li>`;
+        }
+    }
 
+    return lines.join('\n');
+}
     return html;
 }
 
