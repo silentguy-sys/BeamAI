@@ -758,3 +758,94 @@ button{border:0}
     .avatar{width:29px;height:29px;min-width:29px}
     .message-content{font-size:13px}
 }
+
+/* Custom Header & Styling for Markdown Content */
+.message-content h3 {
+    margin: 16px 0 8px 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.message-content li {
+    margin-left: 20px;
+    margin-bottom: 6px;
+    list-style-type: disc;
+}
+
+/* Beautiful Rounded Code Block Box (UICorner Aesthetic) */
+.code-block-container {
+    margin: 14px 0;
+    background: #11141a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px; /* Perfect rounded UICorner shape */
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Header strip inside the code box */
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: #161b22;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.code-block-lang {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #8e96a5;
+}
+
+/* Code Copy Button */
+.code-block-copy-btn {
+    background: transparent;
+    border: none;
+    color: #646c7a;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.code-block-copy-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.code-block-copy-btn.copied {
+    color: #42d97b;
+    background: rgba(66, 217, 123, 0.1);
+}
+
+/* Raw Code Content */
+.code-block-container pre {
+    margin: 0;
+    padding: 14px;
+    overflow-x: auto;
+}
+
+.code-block-container code {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #e2e8f0;
+    background: transparent;
+    padding: 0;
+}
+
+/* Regular Inline Code `labels` outside code blocks */
+:not(pre) > code {
+    font-family: monospace;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ff79c6;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 13px;
+}
