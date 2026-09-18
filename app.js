@@ -577,7 +577,7 @@ function showThinking(model) {
         </div>
         <div class="thinking-content">
             <div class="thinking-header">
-                <span>\${modelName}</span>
+                <span>${modelName}</span>
             </div>
             <div class="thinking-dots">
                 <span></span>
@@ -642,7 +642,7 @@ async function sendMessage() {
     try {
         let sessionId = await ensureSession(conversation);
         let response = await fetch(
-            `\${API_URL}/chat/stream`,
+            `${API_URL}/chat/stream`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -659,7 +659,7 @@ async function sendMessage() {
             saveConversations();
             sessionId = await createSession(conversation);
             response = await fetch(
-                `\${API_URL}/chat/stream`,
+                `${API_URL}/chat/stream`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -678,7 +678,7 @@ async function sendMessage() {
                 const errorData = await response.json();
                 detail = errorData.detail || errorData.message || "";
             } catch {}
-            throw new Error(detail || `Server error (\${response.status})`);
+            throw new Error(detail || `Server error (${response.status})`);
         }
 
         removeThinking();
@@ -775,8 +775,8 @@ function exportConversation() {
 
     const lines = [
         "Beam conversation",
-        `Title: \${conversation.title}`,
-        `Date: \${new Date(conversation.createdAt).toLocaleString()}`,
+        `Title: ${conversation.title}`,
+        `Date: ${new Date(conversation.createdAt).toLocaleString()}`,
         "",
         "----------------------------------------",
         ""
@@ -785,7 +785,7 @@ function exportConversation() {
     for (const message of conversation.messages) {
         const speaker = message.role === "assistant" ? (MODELS[message.model]?.name || "Beam") : "You";
         lines.push(
-            `\${speaker} — \${new Date(message.timestamp).toLocaleString()}`,
+            `${speaker} — ${new Date(message.timestamp).toLocaleString()}`,
             message.content,
             "",
             "----------------------------------------",
@@ -797,7 +797,7 @@ function exportConversation() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `\${conversation.title.replace(/[\\/:*?"<>|]/g, "_")}.txt`;
+    link.download = `${conversation.title.replace(/[\\/:*?"<>|]/g, "_")}.txt`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -810,8 +810,8 @@ function openModal(type) {
         const model = MODELS[selectedModel];
         modalContent.innerHTML = `
             <div class="modal-content">
-                <h2>\${model.name}</h2>
-                <p>\${model.description}</p>
+                <h2>${model.name}</h2>
+                <p>${model.description}</p>
                 <p>The selected model is used for new messages in this conversation.</p>
             </div>
         `;
