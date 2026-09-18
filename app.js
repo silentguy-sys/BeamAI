@@ -349,7 +349,7 @@ function addMessageElement(role, content, timestamp, model) {
 
     const text = document.createElement("div");
     text.className = "message-content";
-    text.textContent = content;
+    text.innerHTML = parseMarkdown(content);
 
     body.appendChild(header);
     body.appendChild(text);
@@ -599,13 +599,13 @@ async function sendMessage() {
             }
             const chunk = decoder.decode(value, { stream: true });
             fullResponseText += chunk;
-            assistantTextNode.textContent = fullResponseText;
+            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
             chatArea.scrollTop = chatArea.scrollHeight;
         }
 
         if (!fullResponseText) {
             fullResponseText = "Beam returned an empty response.";
-            assistantTextNode.textContent = fullResponseText;
+            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
         }
 
         conversation.messages.push({
