@@ -841,9 +841,19 @@ function parseMarkdown(text) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
-    // 2. Code blocks (```lua ... ```)
-    html = html.replace(/```(?:[a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g, '<pre><code>\$1</code></pre>');
-    html = html.replace(/```(?:[a-zA-Z0-9_-]+)?([\s\S]*?)```/g, '<pre><code>\$1</code></pre>');
+    // 2. Beautiful Code blocks with built-in UI containers and copy buttons
+    html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, function(match, lang, code) {
+        const displayLang = lang || 'code';
+        return `
+            <div class="code-block-container">
+                <div class="code-block-header">
+                    <span class="code-block-lang">\${displayLang}</span>
+                    <button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>
+                </div>
+                <pre><code class="language-\({displayLang}">\){code}</code></pre>
+            </div>
+        `;
+    });
 
     // 3. Inline code (`variable`)
     html = html.replace(/`([^`\n]+)`/g, '<code>\$1</code>');
@@ -854,28 +864,58 @@ function parseMarkdown(text) {
     // 5. Italics (*text*)
     html = html.replace(/\*([\s\S]*?)\*/g, '<em>\$1</em>');
 
-    // 6. Line-by-line processing for Headings and Bullet lists
+    // 6. Safe Line-by-Line processing for Headings and Bullet lists
     let lines = html.split('\n');
+    let isInsidePre = false;
+
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i];
 
-        // Headings
-        if (line.startsWith('### ')) {
-            lines[i] = `<h3>${line.slice(4)}</h3>`;
-        } else if (line.startsWith('## ')) {
-            lines[i] = `<h2>${line.slice(3)}</h2>`;
-        } else if (line.startsWith('# ')) {
-            lines[i] = `<h1>${line.slice(2)}</h1>`;
+        // Track if we are inside a code block so we don't accidentally parse code symbols
+        if (line.includes('<pre>')) isInsidePre = true;
+        if (line.includes('</pre>')) {
+            isInsidePre = false;
+            continue;
+        }
+        if (isInsidePre) continue; 
+
+        let trimmed = line.trim();
+
+        // Headings (Using .startsWith on trimmed text fixes the bug completely!)
+        if (trimmed.startsWith('### ')) {
+            lines[i] = `<h3>${trimmed.slice(4)}</h3>`;
+        } else if (trimmed.startsWith('## ')) {
+            lines[i] = `<h2>${trimmed.slice(3)}</h2>`;
+        } else if (trimmed.startsWith('# ')) {
+            lines[i] = `<h1>${trimmed.slice(2)}</h1>`;
         }
         
         // Bullet Points
-        if (line.trim().startsWith('- ')) {
-            lines[i] = `<li>${line.trim().slice(2)}</li>`;
+        if (trimmed.startsWith('- ')) {
+            lines[i] = `<li>${trimmed.slice(2)}</li>`;
         }
     }
 
     return lines.join('\n');
 }
+
+// Global helper function to handle the copy button action
+window.copyCodeSnippet = function(button) {
+    const container = button.closest('.code-block-container');
+    const codeText = container.querySelector('code').textContent;
+
+    navigator.clipboard.writeText(codeText).then(() => {
+        button.textContent = "Copied!";
+        button.classList.add('copied');
+        setTimeout(() => {
+            button.textContent = "Copy";
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(() => {
+        button.textContent = "Failed";
+    });
+};
+
     return html;
 }
 
