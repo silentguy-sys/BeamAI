@@ -835,24 +835,24 @@ if (conversations.length === 0) {
     renderChat();
 }
 function parseMarkdown(text) {
+    if (!text) return "";
+
     // 1. Escape HTML to prevent rendering bugs and XSS
     let html = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
-    // 2. Beautiful Code blocks with built-in UI containers and copy buttons
+    // 2. Beautiful Code blocks with copy buttons (No backtick bugs)
     html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, function(match, lang, code) {
-        const displayLang = lang || 'code';
-        return `
-            <div class="code-block-container">
-                <div class="code-block-header">
-                    <span class="code-block-lang">\${displayLang}</span>
-                    <button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>
-                </div>
-                <pre><code class="language-\({displayLang}">\){code}</code></pre>
-            </div>
-        `;
+        let displayLang = lang || 'code';
+        return '<div class="code-block-container">' +
+                    '<div class="code-block-header">' +
+                        '<span class="code-block-lang">' + displayLang + '</span>' +
+                        '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
+                    '</div>' +
+                    '<pre><code class="language-' + displayLang + '">' + code + '</code></pre>' +
+               '</div>';
     });
 
     // 3. Inline code (`variable`)
@@ -881,23 +881,40 @@ function parseMarkdown(text) {
 
         let trimmed = line.trim();
 
-        // Headings (Using .startsWith on trimmed text fixes the bug completely!)
+        // Headings (.trim() completely fixes the streaming ### bug)
         if (trimmed.startsWith('### ')) {
-            lines[i] = `<h3>${trimmed.slice(4)}</h3>`;
+            lines[i] = '<h3>' + trimmed.slice(4) + '</h3>';
         } else if (trimmed.startsWith('## ')) {
-            lines[i] = `<h2>${trimmed.slice(3)}</h2>`;
+            lines[i] = '<h2>' + trimmed.slice(3) + '</h2>';
         } else if (trimmed.startsWith('# ')) {
-            lines[i] = `<h1>${trimmed.slice(2)}</h1>`;
+            lines[i] = '<h1>' + trimmed.slice(2) + '</h1>';
         }
         
         // Bullet Points
         if (trimmed.startsWith('- ')) {
-            lines[i] = `<li>${trimmed.slice(2)}</li>`;
+            lines[i] = '<li>' + trimmed.slice(2) + '</li>';
         }
     }
 
     return lines.join('\n');
 }
+
+// Global helper function to handle the copy button action
+window.copyCodeSnippet = function(button) {
+    let container = button.closest('.code-block-container');
+    let codeText = container.querySelector('code').textContent;
+
+    navigator.clipboard.writeText(codeText).then(function() {
+        button.textContent = "Copied!";
+        button.classList.add('copied');
+        setTimeout(function() {
+            button.textContent = "Copy";
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(function() {
+        button.textContent = "Failed";
+    });
+};
 
 // Global helper function to handle the copy button action
 window.copyCodeSnippet = function(button) {
