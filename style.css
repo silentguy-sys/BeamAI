@@ -12,6 +12,21 @@
     --muted-2:#646c7a;
     --hover:rgba(255,255,255,.055);
     --green:#42d97b;
+    --accent:#42d97b;
+}
+
+[data-theme="light"]{
+    --bg:#f7f8fa;
+    --sidebar:#ffffff;
+    --panel:#ffffff;
+    --panel-2:#f0f1f4;
+    --border:rgba(0,0,0,.09);
+    --border-strong:rgba(0,0,0,.14);
+    --text:#14161a;
+    --muted:#5c6270;
+    --muted-2:#8a8f99;
+    --hover:rgba(0,0,0,.045);
+    --green:#1fa35a;
 }
 
 html,body{
