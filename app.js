@@ -148,6 +148,14 @@ if (!MODELS[selectedModel]) {
 }
 
 // ============================================================
+// LOGO SPIN STATE
+// ============================================================
+
+function setGeneratingState(isGenerating) {
+    document.body.classList.toggle("is-generating", isGenerating);
+}
+
+// ============================================================
 // THEME / ACCENT / SIDEBAR COLLAPSE
 // ============================================================
 
@@ -634,7 +642,7 @@ function showThinking(model) {
 
     thinkingElement.innerHTML =
         '<div class="avatar beam">' +
-            '<img src="./BeamLogo.png" alt="Beam">' +
+            '<img src="./BeamLogo.png" alt="Beam" class="spinning">' +
         '</div>' +
         '<div class="thinking-content">' +
             '<div class="thinking-header">' +
@@ -704,11 +712,13 @@ async function sendMessage() {
     renderChat();
 
     thinking = true;
+    setGeneratingState(true);
     updateComposer();
     showThinking(modelUsed);
 
     let assistantMessageElement = null;
     let assistantTextNode = null;
+    let assistantAvatarImg = null;
     let fullResponseText = "";
 
     try {
@@ -745,6 +755,11 @@ async function sendMessage() {
         assistantMessageElement = addMessageElement("assistant", "", Date.now(), modelUsed);
         list.appendChild(assistantMessageElement);
         assistantTextNode = assistantMessageElement.querySelector(".message-content");
+
+        // Keep the Beam logo spinning on the real message while it streams in
+        assistantAvatarImg = assistantMessageElement.querySelector(".avatar.beam img");
+        if (assistantAvatarImg) assistantAvatarImg.classList.add("spinning");
+
         removeThinking();
 
         const reader = response.body.getReader();
@@ -777,6 +792,7 @@ async function sendMessage() {
     } catch (error) {
         removeThinking();
         if (assistantMessageElement) assistantMessageElement.remove();
+        assistantAvatarImg = null;
 
         conversation.messages.push({
             role: "assistant",
@@ -789,6 +805,9 @@ async function sendMessage() {
         renderChat();
         showToast("Beam server connection failed");
     } finally {
+        // Stop all spinning logos once generation is finished (or failed)
+        if (assistantAvatarImg) assistantAvatarImg.classList.remove("spinning");
+        setGeneratingState(false);
         thinking = false;
         updateComposer();
         messageInput.focus();
