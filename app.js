@@ -585,6 +585,8 @@ function renderChat() {
     updateComposer();
 }
 
+let thinkingDotsInterval = null;
+
 function showThinking(model) {
     removeThinking();
     const list = getMessageList();
@@ -600,21 +602,38 @@ function showThinking(model) {
         <div class="thinking-content">
             <div class="thinking-header">
                 <span>${modelName}</span>
-            </div>
-            <div class="thinking-dots">
-                <span></span>
-                <span></span>
-                <span></span>
+                <span class="status-text" id="statusText">thinking.</span>
             </div>
         </div>
     `;
     list.appendChild(thinkingElement);
+
+    let dots = 0;
+    thinkingDotsInterval = setInterval(() => {
+        dots = (dots + 1) % 3;
+        const statusEl = document.getElementById("statusText");
+        if (statusEl) statusEl.textContent = "thinking" + ".".repeat(dots + 1);
+    }, 450);
+
     requestAnimationFrame(() => {
         chatArea.scrollTop = chatArea.scrollHeight;
     });
 }
 
+function setThinkingGenerating() {
+    if (thinkingDotsInterval) {
+        clearInterval(thinkingDotsInterval);
+        thinkingDotsInterval = null;
+    }
+    const statusEl = document.getElementById("statusText");
+    if (statusEl) statusEl.textContent = "generating";
+}
+
 function removeThinking() {
+    if (thinkingDotsInterval) {
+        clearInterval(thinkingDotsInterval);
+        thinkingDotsInterval = null;
+    }
     document.getElementById("thinkingIndicator")?.remove();
 }
 
@@ -693,22 +712,22 @@ async function sendMessage() {
                 }
             );
         }
-
         if (!response.ok) {
-            let detail = "";
-            try {
-                const errorData = await response.json();
-                detail = errorData.detail || errorData.message || "";
-            } catch {}
-            throw new Error(detail || `Server error (${response.status})`);
+        let detail = "";
+        try {
+        const errorData = await response.json();
+        detail = errorData.detail || errorData.message || "";
+        } catch {}
+        throw new Error(detail || `Server error (${response.status})`);
         }
 
-        removeThinking();
+        setThinkingGenerating();
 
         const list = getMessageList();
         assistantMessageElement = addMessageElement("assistant", "", Date.now(), modelUsed);
         list.appendChild(assistantMessageElement);
         assistantTextNode = assistantMessageElement.querySelector(".message-content");
+        removeThinking();
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder("utf-8");
