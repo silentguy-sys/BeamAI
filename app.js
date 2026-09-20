@@ -1,7 +1,6 @@
 function parseMarkdown(text) {
     if (!text) return "";
     
-    // 1. Safe HTML Escaping (prevents XSS & raw rendering tags leaking)
     var escaped = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -16,7 +15,6 @@ function parseMarkdown(text) {
     for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
 
-        // 2. Detect Code Block Blocks (```)
         if (line.trim().indexOf("```") === 0) {
             if (!inCodeBlock) {
                 inCodeBlock = true;
@@ -36,7 +34,6 @@ function parseMarkdown(text) {
             continue;
         }
 
-        // Keep internal source lines unformatted inside block wrappers
         if (inCodeBlock) {
             codeContent.push(line);
             continue;
@@ -44,7 +41,6 @@ function parseMarkdown(text) {
 
         var trimmed = line.trim();
 
-        // 3. Match Headings properly (Fixes the ### streaming bug)
         if (trimmed.indexOf("### ") === 0) {
             line = "<h3>" + trimmed.slice(4) + "</h3>";
         } else if (trimmed.indexOf("## ") === 0) {
@@ -53,12 +49,10 @@ function parseMarkdown(text) {
             line = "<h1>" + trimmed.slice(2) + "</h1>";
         }
 
-        // 4. Bullet lists
         if (trimmed.indexOf("- ") === 0) {
             line = "<li>" + trimmed.slice(2) + "</li>";
         }
 
-        // 5. Replace inline layout modifications (Bold, Italics, Code tags)
         line = line.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>$1</strong>");
         line = line.replace(/\*([\s\S]*?)\*/g, "<em>$1</em>");
         line = line.replace(/`([^`\n]+)`/g, "<code>$1</code>");
@@ -66,7 +60,6 @@ function parseMarkdown(text) {
         result.push(line);
     }
 
-    // Interactive fallback loop for unfinished code-block streams
     if (inCodeBlock && codeContent.length > 0) {
         var ongoingBlockHtml = '<div class="code-block-container">' +
                             '<div class="code-block-header">' +
@@ -102,6 +95,9 @@ const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
 const STORAGE_KEY = "beam_conversations_v2";
 const ACTIVE_KEY = "beam_active_conversation_v2";
 const MODEL_KEY = "beam_selected_model_v1";
+const THEME_KEY = "beam_theme_v1";
+const ACCENT_KEY = "beam_accent_v1";
+const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
 
 const MODELS = {
     "beam-1": {
@@ -150,6 +146,32 @@ let thinking = false;
 if (!MODELS[selectedModel]) {
     selectedModel = "beam-1";
 }
+
+// ============================================================
+// THEME / ACCENT / SIDEBAR COLLAPSE
+// ============================================================
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_KEY, theme);
+}
+
+function applyAccent(color) {
+    document.documentElement.style.setProperty("--accent", color);
+    localStorage.setItem(ACCENT_KEY, color);
+}
+
+function applySidebarCollapsed(collapsed) {
+    sidebar.classList.toggle("collapsed", collapsed);
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+    const btn = document.getElementById("collapseButton");
+    if (btn) btn.textContent = collapsed ? "⟩" : "⟨";
+}
+
+function toggleSidebarCollapse() {
+    applySidebarCollapsed(!sidebar.classList.contains("collapsed"));
+}
+
 function loadConversations() {
     try {
         const saved = JSON.parse(
@@ -826,6 +848,26 @@ function openModal(type) {
             </div>
         `;
     }
+    if (type === "theme") {
+        const currentAccent = localStorage.getItem(ACCENT_KEY) || "#42d97b";
+        modalContent.innerHTML = `
+            <div class="modal-content">
+                <h2>Appearance</h2>
+                <p>Choose a theme and accent color.</p>
+                <div style="display:flex;gap:10px;margin-top:14px">
+                    <button id="setLight" style="padding:8px 14px;border-radius:8px;background:#eee;color:#111;cursor:pointer">Light</button>
+                    <button id="setDark" style="padding:8px 14px;border-radius:8px;background:#222;color:#fff;cursor:pointer">Dark</button>
+                </div>
+                <div style="margin-top:14px">
+                    <label style="font-size:12px;color:var(--muted)">Accent color</label><br>
+                    <input type="color" id="accentPicker" value="${currentAccent}" style="margin-top:6px;width:60px;height:34px;cursor:pointer;background:transparent;border:1px solid var(--border-strong);border-radius:6px">
+                </div>
+            </div>
+        `;
+        document.getElementById("setLight").addEventListener("click", () => applyTheme("light"));
+        document.getElementById("setDark").addEventListener("click", () => applyTheme("dark"));
+        document.getElementById("accentPicker").addEventListener("input", e => applyAccent(e.target.value));
+    }
 }
 
 function closeModal() {
@@ -862,6 +904,13 @@ chatSearch.addEventListener("input", renderConversationList);
 mobileMenu.addEventListener("click", () => {
     sidebar.classList.toggle("open");
 });
+
+document.getElementById("collapseButton").addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleSidebarCollapse();
+});
+
+document.getElementById("themeButton").addEventListener("click", () => openModal("theme"));
 
 modelSelector.addEventListener("click", event => {
     event.stopPropagation();
@@ -919,6 +968,13 @@ document.addEventListener("keydown", event => {
         newChat();
     }
 });
+
+applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+
+const savedAccent = localStorage.getItem(ACCENT_KEY);
+if (savedAccent) applyAccent(savedAccent);
+
+applySidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
 
 updateModelUI();
 
