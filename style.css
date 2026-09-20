@@ -350,7 +350,8 @@ button{border:0}
     font-size:10px
 }
 
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.online-dot{width:7px;height:7px;margin-left:auto;border-radius:50%;background:var(--accent);box-shadow:0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)}
 
 .mobile-menu,.mobile-brand,.mobile-model{display:none}
 
