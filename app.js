@@ -1,11 +1,11 @@
 function parseMarkdown(text) {
     if (!text) return "";
-    
+
     var escaped = text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-        
+
     var lines = escaped.split("\n");
     var result = [];
     var inCodeBlock = false;
@@ -98,16 +98,11 @@ const MODEL_KEY = "beam_selected_model_v1";
 const THEME_KEY = "beam_theme_v1";
 const ACCENT_KEY = "beam_accent_v1";
 const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
+const AUTH_KEY = "beam_auth_email_v1";
 
 const MODELS = {
-    "beam-1": {
-        name: "Beam 1",
-        description: "Beam 1"
-    },
-    "beam-o2": {
-        name: "Beam o2",
-        description: "Beam o2"
-    }
+    "beam-1": { name: "Beam 1", description: "Beam 1" },
+    "beam-o2": { name: "Beam o2", description: "Beam o2" }
 };
 
 const chatArea = document.getElementById("chatArea");
@@ -137,11 +132,16 @@ const topModelName = document.getElementById("topModelName");
 const mobileModelName = document.getElementById("mobileModelName");
 const mobileModelButton = document.getElementById("mobileModelButton");
 
+const authSignedOut = document.getElementById("authSignedOut");
+const authSignedIn = document.getElementById("authSignedIn");
+const authEmail = document.getElementById("authEmail");
+
 let conversations = loadConversations();
 let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
 let selectedModel = localStorage.getItem(MODEL_KEY) || "beam-1";
 let currentView = "chats";
 let thinking = false;
+let thinkingDotsInterval = null;
 
 if (!MODELS[selectedModel]) {
     selectedModel = "beam-1";
@@ -172,11 +172,116 @@ function toggleSidebarCollapse() {
     applySidebarCollapsed(!sidebar.classList.contains("collapsed"));
 }
 
+// ============================================================
+// AUTH
+// ============================================================
+
+function updateAuthUI() {
+    const email = localStorage.getItem(AUTH_KEY);
+    if (email) {
+        authSignedOut.classList.add("hidden");
+        authSignedIn.classList.add("visible");
+        authEmail.textContent = email;
+    } else {
+        authSignedOut.classList.remove("hidden");
+        authSignedIn.classList.remove("visible");
+        authEmail.textContent = "";
+    }
+}
+
+function logout() {
+    localStorage.removeItem(AUTH_KEY);
+    updateAuthUI();
+    showToast("Logged out");
+}
+
+function openAuthModal(mode) {
+    modal.classList.remove("hidden");
+
+    const isSignup = mode === "signup";
+
+    modalContent.innerHTML = `
+        <div class="modal-content">
+            <h2>${isSignup ? "Create account" : "Log in"}</h2>
+            <p>${isSignup ? "Sign up to save your Beam account." : "Welcome back."}</p>
+            <div class="form-field">
+                <label>Email</label>
+                <input type="email" id="authEmailInput" autocomplete="email">
+            </div>
+            <div class="form-field">
+                <label>Password</label>
+                <input type="password" id="authPasswordInput" autocomplete="${isSignup ? "new-password" : "current-password"}">
+            </div>
+            <input type="text" id="authWebsiteInput" class="honeypot-field" tabindex="-1" autocomplete="off">
+            <div class="form-error" id="authFormError"></div>
+            <button class="form-submit" id="authSubmitBtn">${isSignup ? "Sign up" : "Log in"}</button>
+            <div class="form-switch">
+                ${isSignup
+                    ? `Already have an account? <a id="authSwitchLink">Log in</a>`
+                    : `Don't have an account? <a id="authSwitchLink">Sign up</a>`
+                }
+            </div>
+        </div>
+    `;
+
+    document.getElementById("authSwitchLink").addEventListener("click", () => {
+        openAuthModal(isSignup ? "login" : "signup");
+    });
+
+    document.getElementById("authSubmitBtn").addEventListener("click", async () => {
+        const email = document.getElementById("authEmailInput").value.trim();
+        const password = document.getElementById("authPasswordInput").value;
+        const website = document.getElementById("authWebsiteInput").value;
+        const errorEl = document.getElementById("authFormError");
+        const submitBtn = document.getElementById("authSubmitBtn");
+
+        errorEl.classList.remove("visible");
+        errorEl.textContent = "";
+
+        if (!email || !password) {
+            errorEl.textContent = "Please fill in both fields.";
+            errorEl.classList.add("visible");
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = isSignup ? "Signing up..." : "Logging in...";
+
+        try {
+            const response = await fetch(`${API_URL}/${isSignup ? "signup" : "login"}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password, website })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Something went wrong.");
+            }
+
+            localStorage.setItem(AUTH_KEY, data.email);
+            updateAuthUI();
+            closeModal();
+            showToast(isSignup ? "Account created" : "Logged in");
+
+        } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.classList.add("visible");
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = isSignup ? "Sign up" : "Log in";
+        }
+    });
+}
+
+// ============================================================
+// CONVERSATIONS
+// ============================================================
+
 function loadConversations() {
     try {
-        const saved = JSON.parse(
-            localStorage.getItem(STORAGE_KEY)
-        );
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
         return Array.isArray(saved) ? saved : [];
     } catch {
         return [];
@@ -184,10 +289,7 @@ function loadConversations() {
 }
 
 function saveConversations() {
-    localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(conversations)
-    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }
 
 function updateModelUI() {
@@ -197,10 +299,7 @@ function updateModelUI() {
     mobileModelName.textContent = model.name;
 
     modelOptions.forEach(option => {
-        option.classList.toggle(
-            "active",
-            option.dataset.model === selectedModel
-        );
+        option.classList.toggle("active", option.dataset.model === selectedModel);
     });
 }
 
@@ -209,25 +308,20 @@ function closeModelMenu() {
 }
 
 function toggleModelMenu() {
-    if (thinking) {
-        return;
-    }
+    if (thinking) return;
     modelMenu.classList.toggle("hidden");
 }
 
 function selectModel(model) {
-    if (thinking) {
-        return;
-    }
-    if (!MODELS[model]) {
-        return;
-    }
+    if (thinking) return;
+    if (!MODELS[model]) return;
     selectedModel = model;
     localStorage.setItem(MODEL_KEY, selectedModel);
     updateModelUI();
     closeModelMenu();
     showToast(`${MODELS[selectedModel].name} selected`);
 }
+
 function createConversation() {
     const now = Date.now();
     const conversation = {
@@ -247,9 +341,7 @@ function createConversation() {
 }
 
 function getActiveConversation() {
-    return conversations.find(
-        conversation => conversation.id === activeConversationId
-    ) || null;
+    return conversations.find(c => c.id === activeConversationId) || null;
 }
 
 function ensureActiveConversation() {
@@ -262,18 +354,11 @@ function ensureActiveConversation() {
 }
 
 async function createSession(conversation) {
-    const response = await fetch(
-        `${API_URL}/session`,
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        }
-    );
-    if (!response.ok) {
-        throw new Error(`Session creation failed (${response.status})`);
-    }
+    const response = await fetch(`${API_URL}/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+    });
+    if (!response.ok) throw new Error(`Session creation failed (${response.status})`);
     const data = await response.json();
     conversation.sessionId = data.session_id;
     conversation.updatedAt = Date.now();
@@ -282,55 +367,32 @@ async function createSession(conversation) {
 }
 
 async function ensureSession(conversation) {
-    if (conversation.sessionId) {
-        return conversation.sessionId;
-    }
+    if (conversation.sessionId) return conversation.sessionId;
     return await createSession(conversation);
 }
 
 function formatTime(timestamp) {
-    return new Intl.DateTimeFormat(
-        undefined,
-        { hour: "numeric", minute: "2-digit" }
-    ).format(new Date(timestamp));
+    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(timestamp));
 }
 
 function formatConversationTime(timestamp) {
     const date = new Date(timestamp);
     const now = new Date();
-    const sameDay =
-        date.getFullYear() === now.getFullYear() &&
-        date.getMonth() === now.getMonth() &&
-        date.getDate() === now.getDate();
-
-    if (sameDay) {
-        return formatTime(timestamp);
-    }
+    const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+    if (sameDay) return formatTime(timestamp);
 
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
-    const isYesterday =
-        date.getFullYear() === yesterday.getFullYear() &&
-        date.getMonth() === yesterday.getMonth() &&
-        date.getDate() === yesterday.getDate();
+    const isYesterday = date.getFullYear() === yesterday.getFullYear() && date.getMonth() === yesterday.getMonth() && date.getDate() === yesterday.getDate();
+    if (isYesterday) return "Yesterday";
 
-    if (isYesterday) {
-        return "Yesterday";
-    }
-    return new Intl.DateTimeFormat(
-        undefined,
-        { month: "short", day: "numeric" }
-    ).format(date);
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
 
 function deriveTitle(text) {
     const cleaned = text.replace(/\s+/g, " ").trim();
-    if (!cleaned) {
-        return "New conversation";
-    }
-    if (cleaned.length <= 48) {
-        return cleaned;
-    }
+    if (!cleaned) return "New conversation";
+    if (cleaned.length <= 48) return cleaned;
     return cleaned.slice(0, 45).trimEnd() + "...";
 }
 
@@ -341,20 +403,11 @@ function showToast(message) {
     toastContainer.appendChild(toast);
     setTimeout(() => { toast.remove(); }, 2600);
 }
+
 function renderConversationList() {
     const query = chatSearch.value.trim().toLowerCase();
     const filtered = conversations
-        .filter(conversation => {
-            if (!query) {
-                return true;
-            }
-            return (
-                conversation.title.toLowerCase().includes(query) ||
-                conversation.messages.some(
-                    message => message.content.toLowerCase().includes(query)
-                )
-            );
-        })
+        .filter(c => !query || c.title.toLowerCase().includes(query) || c.messages.some(m => m.content.toLowerCase().includes(query)))
         .sort((a, b) => b.updatedAt - a.updatedAt);
 
     conversationHeading.textContent = currentView === "recents" ? "Recent" : "Today";
@@ -365,9 +418,7 @@ function renderConversationList() {
     for (const conversation of filtered) {
         const item = document.createElement("div");
         item.className = "conversation-item";
-        if (conversation.id === activeConversationId) {
-            item.classList.add("active");
-        }
+        if (conversation.id === activeConversationId) item.classList.add("active");
 
         const content = document.createElement("div");
         content.className = "conversation-item-content";
@@ -394,24 +445,21 @@ function renderConversationList() {
 
         item.appendChild(content);
         item.appendChild(deleteButton);
-        item.addEventListener("click", () => {
-            openConversation(conversation.id);
-        });
+        item.addEventListener("click", () => openConversation(conversation.id));
         conversationList.appendChild(item);
     }
 }
 
 function deleteConversation(id) {
-    conversations = conversations.filter(conversation => conversation.id !== id);
+    conversations = conversations.filter(c => c.id !== id);
     saveConversations();
 
     if (activeConversationId === id) {
         activeConversationId = null;
         localStorage.removeItem(ACTIVE_KEY);
-
         if (conversations.length > 0) {
             conversations.sort((a, b) => b.updatedAt - a.updatedAt);
-            activeConversationId = conversations.id;
+            activeConversationId = conversations[0].id;
             localStorage.setItem(ACTIVE_KEY, activeConversationId);
         }
     }
@@ -421,13 +469,9 @@ function deleteConversation(id) {
 }
 
 function openConversation(id) {
-    if (thinking) {
-        return;
-    }
-    const conversation = conversations.find(item => item.id === id);
-    if (!conversation) {
-        return;
-    }
+    if (thinking) return;
+    const conversation = conversations.find(c => c.id === id);
+    if (!conversation) return;
     activeConversationId = id;
     localStorage.setItem(ACTIVE_KEY, id);
     renderConversationList();
@@ -500,6 +544,7 @@ function addMessageElement(role, content, timestamp, model) {
     message.appendChild(body);
     return message;
 }
+
 function renderWelcome() {
     const welcome = document.createElement("div");
     welcome.className = "welcome";
@@ -529,10 +574,10 @@ function renderWelcome() {
                 <strong>Brainstorm</strong>
                 <span>Come up with something interesting.</span>
             </button>
-            <button class="suggestion" data-prompt="Hey Beam, how are you?">
-                <span class="suggestion-icon">◌</span>
-                <strong>Just chat</strong>
-                <span>Start a normal conversation.</span>
+            <button class="suggestion" data-prompt="Tell me a random fun fact.">
+                <span class="suggestion-icon">✺</span>
+                <strong>Tell me a fun fact</strong>
+                <span>Something random and interesting.</span>
             </button>
         </div>
     `;
@@ -540,9 +585,7 @@ function renderWelcome() {
 
     welcome.querySelectorAll(".suggestion").forEach(button => {
         button.addEventListener("click", async () => {
-            if (thinking) {
-                return;
-            }
+            if (thinking) return;
             messageInput.value = button.dataset.prompt;
             updateComposer();
             await sendMessage();
@@ -573,19 +616,13 @@ function renderChat() {
     list.className = "message-list";
 
     for (const message of conversation.messages) {
-        list.appendChild(
-            addMessageElement(message.role, message.content, message.timestamp, message.model)
-        );
+        list.appendChild(addMessageElement(message.role, message.content, message.timestamp, message.model));
     }
     chatArea.appendChild(list);
 
-    requestAnimationFrame(() => {
-        chatArea.scrollTop = chatArea.scrollHeight;
-    });
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
     updateComposer();
 }
-
-let thinkingDotsInterval = null;
 
 function showThinking(model) {
     removeThinking();
@@ -595,29 +632,27 @@ function showThinking(model) {
     thinkingElement.id = "thinkingIndicator";
     const modelName = MODELS[model]?.name || "Beam";
 
-    thinkingElement.innerHTML = `
-        <div class="avatar beam">
-            <img src="./BeamLogo.png" alt="Beam">
-        </div>
-        <div class="thinking-content">
-            <div class="thinking-header">
-                <span>${modelName}</span>
-                <span class="status-text" id="statusText">thinking.</span>
-            </div>
-        </div>
-    `;
+    thinkingElement.innerHTML =
+        '<div class="avatar beam">' +
+            '<img src="./BeamLogo.png" alt="Beam">' +
+        '</div>' +
+        '<div class="thinking-content">' +
+            '<div class="thinking-header">' +
+                '<span>' + modelName + '</span>' +
+                '<span class="status-text" id="statusText">thinking.</span>' +
+            '</div>' +
+        '</div>';
+
     list.appendChild(thinkingElement);
 
     let dots = 0;
-    thinkingDotsInterval = setInterval(() => {
+    thinkingDotsInterval = setInterval(function() {
         dots = (dots + 1) % 3;
         const statusEl = document.getElementById("statusText");
         if (statusEl) statusEl.textContent = "thinking" + ".".repeat(dots + 1);
     }, 450);
 
-    requestAnimationFrame(() => {
-        chatArea.scrollTop = chatArea.scrollHeight;
-    });
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
 }
 
 function setThinkingGenerating() {
@@ -634,7 +669,8 @@ function removeThinking() {
         clearInterval(thinkingDotsInterval);
         thinkingDotsInterval = null;
     }
-    document.getElementById("thinkingIndicator")?.remove();
+    const el = document.getElementById("thinkingIndicator");
+    if (el) el.remove();
 }
 
 function updateComposer() {
@@ -645,21 +681,16 @@ function resizeInput() {
     messageInput.style.height = "auto";
     messageInput.style.height = Math.min(messageInput.scrollHeight, 190) + "px";
 }
+
 async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text || thinking) {
-        return;
-    }
+    if (!text || thinking) return;
 
     const conversation = ensureActiveConversation();
     const modelUsed = selectedModel;
     const timestamp = Date.now();
 
-    conversation.messages.push({
-        role: "user",
-        content: text,
-        timestamp
-    });
+    conversation.messages.push({ role: "user", content: text, timestamp });
 
     if (conversation.title === "New conversation" || conversation.messages.length === 1) {
         conversation.title = deriveTitle(text);
@@ -682,43 +713,30 @@ async function sendMessage() {
 
     try {
         let sessionId = await ensureSession(conversation);
-        let response = await fetch(
-            `${API_URL}/chat/stream`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    message: text,
-                    model: modelUsed
-                })
-            }
-        );
+        let response = await fetch(`${API_URL}/chat/stream`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed })
+        });
 
         if (response.status === 404) {
             conversation.sessionId = null;
             saveConversations();
             sessionId = await createSession(conversation);
-            response = await fetch(
-                `${API_URL}/chat/stream`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        message: text,
-                        model: modelUsed
-                    })
-                }
-            );
+            response = await fetch(`${API_URL}/chat/stream`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed })
+            });
         }
+
         if (!response.ok) {
-        let detail = "";
-        try {
-        const errorData = await response.json();
-        detail = errorData.detail || errorData.message || "";
-        } catch {}
-        throw new Error(detail || `Server error (${response.status})`);
+            let detail = "";
+            try {
+                const errorData = await response.json();
+                detail = errorData.detail || errorData.message || "";
+            } catch {}
+            throw new Error(detail || `Server error (${response.status})`);
         }
 
         setThinkingGenerating();
@@ -734,9 +752,7 @@ async function sendMessage() {
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                break;
-            }
+            if (done) break;
             const chunk = decoder.decode(value, { stream: true });
             fullResponseText += chunk;
             assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
@@ -760,9 +776,7 @@ async function sendMessage() {
 
     } catch (error) {
         removeThinking();
-        if (assistantMessageElement) {
-            assistantMessageElement.remove();
-        }
+        if (assistantMessageElement) assistantMessageElement.remove();
 
         conversation.messages.push({
             role: "assistant",
@@ -782,21 +796,15 @@ async function sendMessage() {
 }
 
 function newChat() {
-    if (thinking) {
-        return;
-    }
+    if (thinking) return;
     createConversation();
     messageInput.focus();
 }
 
 function clearCurrentConversation() {
-    if (thinking) {
-        return;
-    }
+    if (thinking) return;
     const conversation = getActiveConversation();
-    if (!conversation) {
-        return;
-    }
+    if (!conversation) return;
     conversation.messages = [];
     conversation.title = "New conversation";
     conversation.updatedAt = Date.now();
@@ -920,9 +928,7 @@ scrollBottom.addEventListener("click", () => {
 
 chatArea.addEventListener("scroll", updateScrollButton);
 chatSearch.addEventListener("input", renderConversationList);
-mobileMenu.addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-});
+mobileMenu.addEventListener("click", () => { sidebar.classList.toggle("open"); });
 
 document.getElementById("collapseButton").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -930,6 +936,9 @@ document.getElementById("collapseButton").addEventListener("click", (event) => {
 });
 
 document.getElementById("themeButton").addEventListener("click", () => openModal("theme"));
+document.getElementById("openLoginBtn").addEventListener("click", () => openAuthModal("login"));
+document.getElementById("openSignupBtn").addEventListener("click", () => openAuthModal("signup"));
+document.getElementById("logoutBtn").addEventListener("click", logout);
 
 modelSelector.addEventListener("click", event => {
     event.stopPropagation();
@@ -957,9 +966,7 @@ document.addEventListener("click", event => {
 
 document.querySelectorAll(".nav-button").forEach(button => {
     button.addEventListener("click", () => {
-        document.querySelectorAll(".nav-button").forEach(item => {
-            item.classList.remove("active");
-        });
+        document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
         button.classList.add("active");
         currentView = button.dataset.view;
         renderConversationList();
@@ -978,9 +985,7 @@ document.addEventListener("keydown", event => {
     }
     if (
         event.key.toLowerCase() === "n" &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.metaKey &&
+        !event.ctrlKey && !event.altKey && !event.metaKey &&
         document.activeElement !== messageInput &&
         document.activeElement !== chatSearch
     ) {
@@ -994,7 +999,7 @@ const savedAccent = localStorage.getItem(ACCENT_KEY);
 if (savedAccent) applyAccent(savedAccent);
 
 applySidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
-
+updateAuthUI();
 updateModelUI();
 
 if (conversations.length === 0) {
