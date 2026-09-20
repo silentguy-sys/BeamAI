@@ -156,6 +156,21 @@ function setGeneratingState(isGenerating) {
 }
 
 // ============================================================
+// LOGIN GATE
+// ============================================================
+
+function isLoggedIn() {
+    return !!localStorage.getItem(AUTH_KEY);
+}
+
+function requireLogin() {
+    if (isLoggedIn()) return true;
+    showToast("Please log in to use Beam");
+    openAuthModal("login");
+    return false;
+}
+
+// ============================================================
 // THEME / ACCENT / SIDEBAR COLLAPSE
 // ============================================================
 
@@ -195,6 +210,7 @@ function updateAuthUI() {
         authSignedIn.classList.remove("visible");
         authEmail.textContent = "";
     }
+    updateComposer();
 }
 
 function logout() {
@@ -594,6 +610,7 @@ function renderWelcome() {
     welcome.querySelectorAll(".suggestion").forEach(button => {
         button.addEventListener("click", async () => {
             if (thinking) return;
+            if (!requireLogin()) return;
             messageInput.value = button.dataset.prompt;
             updateComposer();
             await sendMessage();
@@ -682,7 +699,10 @@ function removeThinking() {
 }
 
 function updateComposer() {
-    sendButton.disabled = thinking || messageInput.value.trim().length === 0;
+    const loggedIn = isLoggedIn();
+    messageInput.disabled = !loggedIn;
+    messageInput.placeholder = loggedIn ? "Message Beam..." : "Log in to chat with Beam...";
+    sendButton.disabled = !loggedIn || thinking || messageInput.value.trim().length === 0;
 }
 
 function resizeInput() {
@@ -691,6 +711,8 @@ function resizeInput() {
 }
 
 async function sendMessage() {
+    if (!requireLogin()) return;
+
     const text = messageInput.value.trim();
     if (!text || thinking) return;
 
@@ -816,6 +838,7 @@ async function sendMessage() {
 
 function newChat() {
     if (thinking) return;
+    if (!requireLogin()) return;
     createConversation();
     messageInput.focus();
 }
@@ -1006,7 +1029,8 @@ document.addEventListener("keydown", event => {
         event.key.toLowerCase() === "n" &&
         !event.ctrlKey && !event.altKey && !event.metaKey &&
         document.activeElement !== messageInput &&
-        document.activeElement !== chatSearch
+        document.activeElement !== chatSearch &&
+        !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)
     ) {
         newChat();
     }
