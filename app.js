@@ -101,8 +101,21 @@ const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
 const AUTH_KEY = "beam_auth_email_v1";
 
 const MODELS = {
-    "beam-1": { name: "Beam 1", description: "Beam 1" },
-    "beam-o2": { name: "Beam o2", description: "Beam o2" }
+    "beam-1": {
+        name: "Beam 1",
+        tag: "Main model",
+        description: "Beam 1 is good for daily usage for some slight coding and talking with."
+    },
+    "beam-o2": {
+        name: "Beam o2",
+        tag: "Mini model",
+        description: "Beam o2 is a mini model, using less usage and not for coding, specifically made to talk with."
+    },
+    "beam-1-fol": {
+        name: "Beam 1 Fol",
+        tag: "Advanced model",
+        description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
+    }
 };
 
 const chatArea = document.getElementById("chatArea");
@@ -126,7 +139,6 @@ const toastContainer = document.getElementById("toastContainer");
 
 const modelSelector = document.getElementById("modelSelector");
 const modelMenu = document.getElementById("modelMenu");
-const modelOptions = document.querySelectorAll(".model-option");
 const selectedModelName = document.getElementById("selectedModelName");
 const topModelName = document.getElementById("topModelName");
 const mobileModelName = document.getElementById("mobileModelName");
@@ -322,7 +334,7 @@ function updateModelUI() {
     topModelName.textContent = model.name;
     mobileModelName.textContent = model.name;
 
-    modelOptions.forEach(option => {
+    document.querySelectorAll(".model-option").forEach(option => {
         option.classList.toggle("active", option.dataset.model === selectedModel);
     });
 }
@@ -903,7 +915,7 @@ function openModal(type) {
             <div class="modal-content">
                 <h2>${model.name}</h2>
                 <p>${model.description}</p>
-                <p>The selected model is used for new messages in this conversation.</p>
+                <p>The selected model is used for new messages in this conversation. You can switch models any time from the sidebar.</p>
             </div>
         `;
     }
@@ -993,11 +1005,14 @@ mobileModelButton.addEventListener("click", event => {
     modelMenu.classList.remove("hidden");
 });
 
-modelOptions.forEach(option => {
-    option.addEventListener("click", event => {
-        event.stopPropagation();
-        selectModel(option.dataset.model);
-    });
+// Delegate model-option clicks so dynamically present buttons (all three
+// models, including Beam 1 Fol) work without needing a static NodeList
+// captured at load time.
+modelMenu.addEventListener("click", event => {
+    const option = event.target.closest(".model-option");
+    if (!option) return;
+    event.stopPropagation();
+    selectModel(option.dataset.model);
 });
 
 document.addEventListener("click", event => {
