@@ -124,7 +124,7 @@ const MODELS = {
     "o1-flash": {
         name: "O1 Flash",
         tag: "Guest model",
-        description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in."
+        description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in. Not recommended for daily use"
     }
 };
 
