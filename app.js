@@ -102,8 +102,8 @@ const AUTH_KEY = "beam_auth_email_v1";
 
 // Models that guests (not logged in) are allowed to use. Keep this in
 // sync with GUEST_ALLOWED_MODELS on the server.
-const GUEST_ALLOWED_MODELS = ["o1-flash"];
-const GUEST_DEFAULT_MODEL = "o1-flash";
+const GUEST_ALLOWED_MODELS = ["beam-o1-flash"];
+const GUEST_DEFAULT_MODEL = "beam-o1-flash";
 
 const MODELS = {
     "beam-1": {
@@ -121,10 +121,10 @@ const MODELS = {
         tag: "Advanced model",
         description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
     },
-    "o1-flash": {
+    "beam-o1-flash": {
         name: "O1 Flash",
         tag: "Guest model",
-        description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in. Not recommended for daily use"
+        description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in."
     }
 };
 
