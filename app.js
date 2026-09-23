@@ -100,6 +100,11 @@ const ACCENT_KEY = "beam_accent_v1";
 const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
 const AUTH_KEY = "beam_auth_email_v1";
 
+// Models that guests (not logged in) are allowed to use. Keep this in
+// sync with GUEST_ALLOWED_MODELS on the server.
+const GUEST_ALLOWED_MODELS = ["o1-flash"];
+const GUEST_DEFAULT_MODEL = "o1-flash";
+
 const MODELS = {
     "beam-1": {
         name: "Beam 1",
@@ -115,6 +120,11 @@ const MODELS = {
         name: "Beam 1 Fol",
         tag: "Advanced model",
         description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
+    },
+    "o1-flash": {
+        name: "O1 Flash",
+        tag: "Guest model",
+        description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in."
     }
 };
 
@@ -159,6 +169,13 @@ if (!MODELS[selectedModel]) {
     selectedModel = "beam-1";
 }
 
+// If we're not logged in on load and the remembered model isn't guest
+// accessible, fall back to the guest model so the composer works.
+if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(selectedModel)) {
+    selectedModel = GUEST_DEFAULT_MODEL;
+    localStorage.setItem(MODEL_KEY, selectedModel);
+}
+
 // ============================================================
 // LOGO SPIN STATE
 // ============================================================
@@ -173,6 +190,13 @@ function setGeneratingState(isGenerating) {
 
 function isLoggedIn() {
     return !!localStorage.getItem(AUTH_KEY);
+}
+
+// Guests can still chat, but only with a guest-allowed model. Other
+// models require login. Returns true if the current state is OK to send.
+function canUseModel(model) {
+    if (isLoggedIn()) return true;
+    return GUEST_ALLOWED_MODELS.includes(model);
 }
 
 function requireLogin() {
@@ -221,8 +245,16 @@ function updateAuthUI() {
         authSignedOut.classList.remove("hidden");
         authSignedIn.classList.remove("visible");
         authEmail.textContent = "";
+
+        // Logged out: force back to a guest-usable model if needed.
+        if (!GUEST_ALLOWED_MODELS.includes(selectedModel)) {
+            selectedModel = GUEST_DEFAULT_MODEL;
+            localStorage.setItem(MODEL_KEY, selectedModel);
+            updateModelUI();
+        }
     }
     updateComposer();
+    renderModelMenuLocks();
 }
 
 function logout() {
@@ -337,6 +369,21 @@ function updateModelUI() {
     document.querySelectorAll(".model-option").forEach(option => {
         option.classList.toggle("active", option.dataset.model === selectedModel);
     });
+
+    renderModelMenuLocks();
+}
+
+// Grey out / lock model options that guests aren't allowed to use, and
+// label the guest-usable one so it's clear why it's special.
+function renderModelMenuLocks() {
+    const loggedIn = isLoggedIn();
+
+    document.querySelectorAll(".model-option").forEach(option => {
+        const model = option.dataset.model;
+        const locked = !loggedIn && !GUEST_ALLOWED_MODELS.includes(model);
+        option.classList.toggle("locked", locked);
+        option.title = locked ? "Log in to use this model" : "";
+    });
 }
 
 function closeModelMenu() {
@@ -351,6 +398,14 @@ function toggleModelMenu() {
 function selectModel(model) {
     if (thinking) return;
     if (!MODELS[model]) return;
+
+    if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(model)) {
+        closeModelMenu();
+        showToast("Log in to use this model");
+        openAuthModal("login");
+        return;
+    }
+
     selectedModel = model;
     localStorage.setItem(MODEL_KEY, selectedModel);
     updateModelUI();
@@ -622,7 +677,6 @@ function renderWelcome() {
     welcome.querySelectorAll(".suggestion").forEach(button => {
         button.addEventListener("click", async () => {
             if (thinking) return;
-            if (!requireLogin()) return;
             messageInput.value = button.dataset.prompt;
             updateComposer();
             await sendMessage();
@@ -711,10 +765,14 @@ function removeThinking() {
 }
 
 function updateComposer() {
-    const loggedIn = isLoggedIn();
-    messageInput.disabled = !loggedIn;
-    messageInput.placeholder = loggedIn ? "Message Beam..." : "Log in to chat with Beam...";
-    sendButton.disabled = !loggedIn || thinking || messageInput.value.trim().length === 0;
+    // Guests can chat as long as the currently selected model is one
+    // they're allowed to use (o1-flash). Logged-in users can always chat.
+    const canSend = isLoggedIn() || GUEST_ALLOWED_MODELS.includes(selectedModel);
+    messageInput.disabled = !canSend;
+    messageInput.placeholder = canSend
+        ? (isLoggedIn() ? "Message Beam..." : "Message O1 Flash (guest mode)...")
+        : "Log in to chat with Beam...";
+    sendButton.disabled = !canSend || thinking || messageInput.value.trim().length === 0;
 }
 
 function resizeInput() {
@@ -723,7 +781,15 @@ function resizeInput() {
 }
 
 async function sendMessage() {
-    if (!requireLogin()) return;
+    const guestMode = !isLoggedIn();
+
+    // Guests may only ever talk to a guest-allowed model. If somehow the
+    // selection drifted elsewhere, bounce them to login instead of
+    // silently switching models on them.
+    if (guestMode && !GUEST_ALLOWED_MODELS.includes(selectedModel)) {
+        requireLogin();
+        return;
+    }
 
     const text = messageInput.value.trim();
     if (!text || thinking) return;
@@ -760,7 +826,7 @@ async function sendMessage() {
         let response = await fetch(`${API_URL}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed })
+            body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed, guest: guestMode })
         });
 
         if (response.status === 404) {
@@ -770,8 +836,17 @@ async function sendMessage() {
             response = await fetch(`${API_URL}/chat/stream`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed })
+                body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed, guest: guestMode })
             });
+        }
+
+        if (response.status === 403) {
+            let detail = "Log in to use this model.";
+            try {
+                const errorData = await response.json();
+                detail = errorData.detail || detail;
+            } catch {}
+            throw new Error(detail);
         }
 
         if (!response.ok) {
@@ -850,7 +925,6 @@ async function sendMessage() {
 
 function newChat() {
     if (thinking) return;
-    if (!requireLogin()) return;
     createConversation();
     messageInput.focus();
 }
@@ -926,6 +1000,7 @@ function openModal(type) {
                 <p>Beam is an experimental AI project. Responses can be incorrect, incomplete, outdated, or misleading.</p>
                 <p>Do not rely on Beam for medical, legal, financial, emergency, or other high-stakes decisions.</p>
                 <p>This public beta is operated through a personally hosted Beam server. Availability, performance, session persistence, and response quality may change without notice.</p>
+                <p>Without an account, you can talk to O1 Flash only. Log in or sign up to unlock the other Beam models.</p>
             </div>
         `;
     }
@@ -1005,8 +1080,8 @@ mobileModelButton.addEventListener("click", event => {
     modelMenu.classList.remove("hidden");
 });
 
-// Delegate model-option clicks so dynamically present buttons (all three
-// models, including Beam 1 Fol) work without needing a static NodeList
+// Delegate model-option clicks so dynamically present buttons (all
+// models, including O1 Flash) work without needing a static NodeList
 // captured at load time.
 modelMenu.addEventListener("click", event => {
     const option = event.target.closest(".model-option");
