@@ -90,9 +90,9 @@ window.copyCodeSnippet = function(button) {
     });
 };
 
-const API_URL = "https://desktop-3i8g9td.tailfff298.ts.net";
+const API_URL = "https://nuclearbomb.tailfff298.ts.net";
 
-const STORAGE_KEY = "beam_conversations_v2";
+const STORAGE_KEY = "beam_conversations_v2";desktop
 const ACTIVE_KEY = "beam_active_conversation_v2";
 const MODEL_KEY = "beam_selected_model_v1";
 const THEME_KEY = "beam_theme_v1";
@@ -122,8 +122,8 @@ const MODELS = {
         description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
     },
     "beam-o1-flash": {
-        name: "O1 Flash",
-        tag: "Guest model",
+        name: "Beam o1 Flash",
+        tag: "Very Mini model",
         description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in."
     }
 };
@@ -158,7 +158,7 @@ const authSignedOut = document.getElementById("authSignedOut");
 const authSignedIn = document.getElementById("authSignedIn");
 const authEmail = document.getElementById("authEmail");
 
-let conversations = loadConversations();
+let conversations = loadConversations();desktop
 let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
 let selectedModel = localStorage.getItem(MODEL_KEY) || "beam-1";
 let currentView = "chats";
@@ -184,7 +184,7 @@ function setGeneratingState(isGenerating) {
     document.body.classList.toggle("is-generating", isGenerating);
 }
 
-// ============================================================
+// ============================================================desktop
 // LOGIN GATE
 // ============================================================
 
