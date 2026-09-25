@@ -92,7 +92,7 @@ window.copyCodeSnippet = function(button) {
 
 const API_URL = "https://nuclearbomb.tailfff298.ts.net";
 
-const STORAGE_KEY = "beam_conversations_v2";desktop
+const STORAGE_KEY = "beam_conversations_v2";
 const ACTIVE_KEY = "beam_active_conversation_v2";
 const MODEL_KEY = "beam_selected_model_v1";
 const THEME_KEY = "beam_theme_v1";
@@ -158,7 +158,7 @@ const authSignedOut = document.getElementById("authSignedOut");
 const authSignedIn = document.getElementById("authSignedIn");
 const authEmail = document.getElementById("authEmail");
 
-let conversations = loadConversations();desktop
+let conversations = loadConversations();
 let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
 let selectedModel = localStorage.getItem(MODEL_KEY) || "beam-1";
 let currentView = "chats";
@@ -184,7 +184,7 @@ function setGeneratingState(isGenerating) {
     document.body.classList.toggle("is-generating", isGenerating);
 }
 
-// ============================================================desktop
+// ============================================================
 // LOGIN GATE
 // ============================================================
 
