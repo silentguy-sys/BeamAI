@@ -12,6 +12,7 @@
     --muted-2:#646c7a;
     --hover:rgba(255,255,255,.055);
     --green:#42d97b;
+    --red:#ff5c5c;
     --accent:#42d97b;
 }
 
@@ -54,7 +55,7 @@ button{border:0}
     background:var(--sidebar);
     border-right:1px solid var(--border);
     z-index:20;
-    transition:width .18s ease, min-width .18s ease, background .15s ease, border-color .15s ease;
+    transition:width .18s cubic-bezier(.4,0,.2,1), min-width .18s cubic-bezier(.4,0,.2,1), background .15s ease, border-color .15s ease, left .22s cubic-bezier(.4,0,.2,1);
 }
 
 .sidebar.collapsed{
@@ -142,8 +143,9 @@ body.is-generating .brand-logo img{
     border-radius:7px;
     cursor:pointer;
     font-size:14px;
+    transition:.15s ease;
 }
-.sidebar-collapse-btn:hover{color:var(--text); background:var(--hover)}
+.sidebar-collapse-btn:hover{color:var(--text); background:var(--hover); transform:scale(1.08)}
 
 .new-chat{
     width:100%;
@@ -158,10 +160,11 @@ body.is-generating .brand-logo img{
     cursor:pointer;
     font-weight:650;
     transition:.16s ease;
-    box-shadow:0 6px 18px rgba(0,0,0,.18);
+    box-shadow:0 6px 18px rgba(0,0,0,.18), 0 0 0 1px rgba(255,255,255,.04) inset;
 }
 
-.new-chat:hover{transform:translateY(-1px); box-shadow:0 10px 24px rgba(0,0,0,.25)}
+.new-chat:hover{transform:translateY(-1px); box-shadow:0 10px 26px rgba(0,0,0,.28), 0 0 22px color-mix(in srgb, var(--accent) 25%, transparent)}
+.new-chat:active{transform:translateY(0)}
 .new-chat-icon{font-size:20px}
 .new-chat-key{margin-left:auto;color:#777;font-size:11px}
 
@@ -175,8 +178,10 @@ body.is-generating .brand-logo img{
     border:1px solid var(--border);
     border-radius:10px;
     background:rgba(255,255,255,.025);
-    color:var(--muted)
+    color:var(--muted);
+    transition:border-color .15s ease;
 }
+.sidebar-search:focus-within{border-color:color-mix(in srgb, var(--accent) 40%, var(--border-strong))}
 
 .sidebar-search input{
     width:100%;
@@ -203,7 +208,8 @@ body.is-generating .brand-logo img{
     background:transparent;
     border-radius:8px;
     cursor:pointer;
-    font-size:12px
+    font-size:12px;
+    transition:.15s ease;
 }
 
 .nav-button:hover,.nav-button.active{
@@ -244,13 +250,16 @@ body.is-generating .brand-logo img{
     background:transparent;
     border-radius:10px;
     cursor:pointer;
-    text-align:left
+    text-align:left;
+    transition:background .12s ease, color .12s ease;
 }
 
 .conversation-item:hover,.conversation-item.active{
     background:var(--hover);
     color:var(--text)
 }
+
+.conversation-item.active{box-shadow:inset 2px 0 0 var(--accent)}
 
 .conversation-item-content{min-width:0;flex:1}
 .conversation-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}
@@ -305,6 +314,7 @@ body.is-generating .brand-logo img{
     font-size:12px;
     font-weight:600;
     cursor:pointer;
+    transition:.15s ease;
 }
 
 #openLoginBtn{
@@ -319,7 +329,7 @@ body.is-generating .brand-logo img{
     color:#0a0a0a;
     border:1px solid transparent;
 }
-#openSignupBtn:hover{filter:brightness(1.08)}
+#openSignupBtn:hover{filter:brightness(1.08); transform:translateY(-1px)}
 
 .auth-signed-in{
     display:none;
@@ -363,10 +373,12 @@ body.is-generating .brand-logo img{
     background:rgba(255,255,255,.025);
     cursor:pointer;
     text-align:left;
+    transition:.15s ease;
 }
 
 .model-selector-button:hover{
     background:var(--hover);
+    border-color:var(--border-strong);
 }
 
 .model-selector-button .model-card-logo{
@@ -387,7 +399,10 @@ body.is-generating .brand-logo img{
 .model-selector-info span{
     color:var(--accent);
     font-size:10px;
+    transition:color .15s ease;
 }
+
+.model-selector-info span.offline{color:var(--red)}
 
 .model-selector-arrow{
     margin-left:auto;
@@ -437,22 +452,27 @@ body.is-generating .brand-logo img{
     display:flex;
     align-items:center;
     justify-content:space-between;
+    gap:8px;
     padding:10px;
     border-radius:8px;
     color:var(--text);
     background:transparent;
     cursor:pointer;
     text-align:left;
+    transition:background .12s ease;
 }
 
 .model-option:hover{
     background:var(--hover);
 }
 
+.model-option.locked{opacity:.45}
+
 .model-option-main{
     display:flex;
     flex-direction:column;
     gap:3px;
+    min-width:0;
 }
 
 .model-option-main strong{
@@ -464,6 +484,21 @@ body.is-generating .brand-logo img{
     font-size:10px;
 }
 
+.model-option-dot{
+    width:7px;
+    height:7px;
+    min-width:7px;
+    border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 6px color-mix(in srgb, var(--green) 70%, transparent);
+    transition:background .2s ease, box-shadow .2s ease;
+}
+
+.model-option-dot.offline{
+    background:var(--red);
+    box-shadow:0 0 6px color-mix(in srgb, var(--red) 70%, transparent);
+}
+
 .model-option-check{
     color:var(--accent);
     opacity:0;
@@ -471,6 +506,20 @@ body.is-generating .brand-logo img{
 
 .model-option.active .model-option-check{
     opacity:1;
+}
+
+.modal-status-dot{
+    display:inline-block;
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 6px color-mix(in srgb, var(--green) 70%, transparent);
+    margin-right:4px;
+}
+.modal-status-dot.offline{
+    background:var(--red);
+    box-shadow:0 0 6px color-mix(in srgb, var(--red) 70%, transparent);
 }
 
 .sidebar-links{
@@ -498,8 +547,8 @@ body.is-generating .brand-logo img{
     display:flex;
     flex-direction:column;
     background:
-        radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 40%),
-        radial-gradient(circle at 85% 100%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 45%),
+        radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 42%),
+        radial-gradient(circle at 85% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 48%),
         var(--bg);
 }
 
@@ -526,10 +575,14 @@ body.is-generating .brand-logo img{
     align-items:center;
     gap:5px;
     color:var(--muted);
-    font-size:10px
+    font-size:10px;
+    transition:color .15s ease;
 }
 
-.status-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px color-mix(in srgb, var(--green) 70%, transparent);transition:background .2s ease, box-shadow .2s ease}
+
+.status-pill.offline .status-dot{background:var(--red);box-shadow:0 0 6px color-mix(in srgb, var(--red) 70%, transparent)}
+.status-pill.offline #topStatusText{color:var(--red)}
 
 .mobile-menu,.mobile-brand,.mobile-model{display:none}
 
@@ -545,10 +598,11 @@ body.is-generating .brand-logo img{
     background:transparent;
     border-radius:9px;
     cursor:pointer;
-    font-size:16px
+    font-size:16px;
+    transition:.15s ease;
 }
 
-.topbar-button:hover{color:var(--text);background:var(--hover)}
+.topbar-button:hover{color:var(--text);background:var(--hover); transform:translateY(-1px)}
 
 .chat-shell{position:relative;flex:1;min-height:0}
 
@@ -608,14 +662,14 @@ body.is-generating .brand-logo img{
     background:rgba(255,255,255,.025);
     cursor:pointer;
     text-align:left;
-    transition:.18s ease
+    transition:.18s cubic-bezier(.4,0,.2,1);
 }
 
 .suggestion:hover{
     transform:translateY(-3px);
     border-color:color-mix(in srgb, var(--accent) 45%, var(--border-strong));
     background:var(--hover);
-    box-shadow:0 14px 34px rgba(0,0,0,.2);
+    box-shadow:0 14px 34px rgba(0,0,0,.2), 0 0 24px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .suggestion-icon{display:block;margin-bottom:10px;font-size:19px}
@@ -753,9 +807,11 @@ body.is-generating .brand-logo img{
     color:var(--muted);
     background:color-mix(in srgb, var(--panel) 92%, transparent);
     backdrop-filter:blur(8px);
-    cursor:pointer
+    cursor:pointer;
+    transition:.15s ease;
 }
 
+.scroll-bottom:hover{transform:translateY(-2px)}
 .scroll-bottom.visible{display:flex}
 
 .composer-wrap{
@@ -782,7 +838,7 @@ body.is-generating .brand-logo img{
     box-shadow:0 14px 45px rgba(0,0,0,.3)
 }
 
-.composer:focus-within{border-color:color-mix(in srgb, var(--accent) 45%, var(--border-strong))}
+.composer:focus-within{border-color:color-mix(in srgb, var(--accent) 45%, var(--border-strong)); box-shadow:0 14px 45px rgba(0,0,0,.3), 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)}
 
 #messageInput{
     flex:1;
@@ -813,10 +869,11 @@ body.is-generating .brand-logo img{
     background:var(--accent);
     cursor:pointer;
     font-size:19px;
-    font-weight:700
+    font-weight:700;
+    transition:.15s cubic-bezier(.4,0,.2,1);
 }
 
-.send-button:hover:not(:disabled){transform:scale(1.05);filter:brightness(1.08)}
+.send-button:hover:not(:disabled){transform:scale(1.07);filter:brightness(1.08)}
 .send-button:disabled{opacity:.25;cursor:default}
 
 .composer-footer{
@@ -969,13 +1026,19 @@ body.is-generating .brand-logo img{
         left:-285px;
         top:0;
         bottom:0;
-        transition:left .2s ease;
-        box-shadow:20px 0 50px rgba(0,0,0,.3)
+        transition:left .22s cubic-bezier(.4,0,.2,1);
+        box-shadow:20px 0 50px rgba(0,0,0,.3);
+        width:272px;
+        min-width:272px;
     }
 
     .sidebar.open{left:0}
+
+    /* On narrow/tall screens the "collapse" button toggles the drawer
+       open/closed via .open (handled in JS) instead of the desktop
+       icons-only .collapsed state, so force full sidebar content here
+       regardless of any leftover .collapsed class from a wider layout. */
     .sidebar.collapsed{width:272px; min-width:272px}
-    .sidebar.collapsed.open{left:0}
     .sidebar.collapsed .new-chat span:not(.new-chat-icon),
     .sidebar.collapsed .sidebar-search,
     .sidebar.collapsed .sidebar-nav span:last-child,
@@ -1052,6 +1115,34 @@ body.is-generating .brand-logo img{
         background:rgba(255,255,255,.05);
         cursor:pointer;
         font-size:12px;
+    }
+}
+
+/* Tall / narrow vertical screens (portrait tablets, foldables) get the
+   same off-canvas drawer behavior as phones, even above the 800px
+   width breakpoint, since a tall-but-wide-enough viewport otherwise
+   fell through to the desktop layout with no way to reach the sidebar
+   without the hamburger. */
+@media(max-height:700px) and (max-width:1100px) and (orientation:portrait){
+    .sidebar{
+        position:fixed;
+        left:-285px;
+        top:0;
+        bottom:0;
+        width:272px;
+        min-width:272px;
+    }
+    .sidebar.open{left:0}
+    .mobile-menu{
+        display:flex;
+        width:34px;
+        height:34px;
+        align-items:center;
+        justify-content:center;
+        color:var(--muted);
+        background:transparent;
+        border-radius:8px;
+        cursor:pointer
     }
 }
 
