@@ -127,7 +127,7 @@ const MODELS = {
     "beam-syntax-1": {
         name: "BeamSyntax 1",
         tag: "Coding model",
-        description: "BeamSyntax 1 runs remotely on the 4060 rig over Tailscale and is tuned specifically for coding."
+        description: "BeamSyntax 1 is heavily focused on coding, recommended for heavy coding"
     },
     "beam-o1-flash": {
         name: "Beam o1 Flash",
