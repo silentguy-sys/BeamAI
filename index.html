@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12">
 <meta name="description" content="Beam AI">
 <link rel="icon" type="image/png" href="./BeamLogo.png">
@@ -85,7 +85,7 @@
 </div>
 <div class="model-selector-info">
 <strong id="selectedModelName">Beam 1</strong>
-<span>Online</span>
+<span id="sidebarStatusText">Online</span>
 </div>
 <span class="model-selector-arrow">⌃</span>
 </button>
@@ -96,6 +96,7 @@
 <strong>Beam 1</strong>
 <span>Daily use, light coding, and talking</span>
 </span>
+<span class="model-option-dot" title="Status"></span>
 <span class="model-option-check">✓</span>
 </button>
 <button class="model-option" data-model="beam-1-fol">
@@ -103,6 +104,15 @@
 <strong>Beam 1 Fol</strong>
 <span>Stronger coding and conversation, better than Beam 1</span>
 </span>
+<span class="model-option-dot" title="Status"></span>
+<span class="model-option-check">✓</span>
+</button>
+<button class="model-option" data-model="beam-syntax-1">
+<span class="model-option-main">
+<strong>BeamSyntax 1</strong>
+<span>Remote coding model on the 4060 rig (Tailscale)</span>
+</span>
+<span class="model-option-dot" title="Status"></span>
 <span class="model-option-check">✓</span>
 </button>
 <button class="model-option" data-model="beam-o2">
@@ -110,6 +120,7 @@
 <strong>Beam o2</strong>
 <span>Mini model, lighter usage, made for talking</span>
 </span>
+<span class="model-option-dot" title="Status"></span>
 <span class="model-option-check">✓</span>
 </button>
 <button class="model-option" data-model="beam-o1-flash">
@@ -117,6 +128,7 @@
 <strong>O1 Flash</strong>
 <span>Fast and light — works without logging in</span>
 </span>
+<span class="model-option-dot" title="Status"></span>
 <span class="model-option-check">✓</span>
 </button>
 </div>
@@ -143,9 +155,9 @@
 </div>
 <div class="model-title">
 <strong id="topModelName">Beam 1</strong>
-<span class="status-pill">
+<span class="status-pill" id="topStatusPill">
 <span class="status-dot"></span>
-Online
+<span id="topStatusText">Online</span>
 </span>
 </div>
 <div class="mobile-model-selector">
