@@ -100,6 +100,9 @@ const ACCENT_KEY = "beam_accent_v1";
 const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
 const AUTH_KEY = "beam_auth_email_v1";
 
+// How often to poll /health for real online/offline status per model.
+const HEALTH_POLL_MS = 10000;
+
 // Models that guests (not logged in) are allowed to use. Keep this in
 // sync with GUEST_ALLOWED_MODELS on the server.
 const GUEST_ALLOWED_MODELS = ["beam-o1-flash"];
@@ -121,12 +124,21 @@ const MODELS = {
         tag: "Advanced model",
         description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
     },
+    "beam-syntax-1": {
+        name: "BeamSyntax 1",
+        tag: "Coding model",
+        description: "BeamSyntax 1 runs remotely on the 4060 rig over Tailscale and is tuned specifically for coding."
+    },
     "beam-o1-flash": {
         name: "Beam o1 Flash",
         tag: "Very Mini model",
         description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in."
     }
 };
+
+// Live status per model, filled in by pollHealth(). Until the first
+// poll completes we assume nothing is confirmed online.
+let modelStatus = {};
 
 const chatArea = document.getElementById("chatArea");
 const messageInput = document.getElementById("messageInput");
@@ -153,6 +165,9 @@ const selectedModelName = document.getElementById("selectedModelName");
 const topModelName = document.getElementById("topModelName");
 const mobileModelName = document.getElementById("mobileModelName");
 const mobileModelButton = document.getElementById("mobileModelButton");
+const topStatusPill = document.getElementById("topStatusPill");
+const topStatusText = document.getElementById("topStatusText");
+const sidebarStatusText = document.getElementById("sidebarStatusText");
 
 const authSignedOut = document.getElementById("authSignedOut");
 const authSignedIn = document.getElementById("authSignedIn");
@@ -182,6 +197,58 @@ if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(selectedModel)) {
 
 function setGeneratingState(isGenerating) {
     document.body.classList.toggle("is-generating", isGenerating);
+}
+
+// ============================================================
+// LIVE HEALTH / ONLINE STATUS
+// ============================================================
+
+function isModelOnline(model) {
+    const status = modelStatus[model];
+    return !!(status && status.running);
+}
+
+function renderStatusUI() {
+    const online = isModelOnline(selectedModel);
+
+    // Sidebar model-selector pill
+    if (sidebarStatusText) {
+        sidebarStatusText.textContent = online ? "Online" : "Offline";
+        sidebarStatusText.classList.toggle("offline", !online);
+    }
+
+    // Top bar status pill
+    if (topStatusPill) {
+        topStatusPill.classList.toggle("offline", !online);
+    }
+    if (topStatusText) {
+        topStatusText.textContent = online ? "Online" : "Offline";
+    }
+
+    // Grey out / dot each entry in the model dropdown menu
+    document.querySelectorAll(".model-option").forEach(option => {
+        const model = option.dataset.model;
+        const dot = option.querySelector(".model-option-dot");
+        if (dot) {
+            dot.classList.toggle("offline", !isModelOnline(model));
+        }
+    });
+}
+
+async function pollHealth() {
+    try {
+        const response = await fetch(`${API_URL}/health`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Health check failed (${response.status})`);
+        const data = await response.json();
+        modelStatus = data.models || {};
+    } catch (err) {
+        // Server unreachable entirely: mark everything offline rather than
+        // leaving stale "online" state on screen.
+        const cleared = {};
+        Object.keys(modelStatus).forEach(key => { cleared[key] = { running: false }; });
+        modelStatus = cleared;
+    }
+    renderStatusUI();
 }
 
 // ============================================================
@@ -220,6 +287,12 @@ function applyAccent(color) {
     localStorage.setItem(ACCENT_KEY, color);
 }
 
+// True when the layout is running the narrow / mobile-style breakpoint,
+// which includes tall vertical phone/tablet screens.
+function isNarrowLayout() {
+    return window.matchMedia("(max-width: 800px)").matches;
+}
+
 function applySidebarCollapsed(collapsed) {
     sidebar.classList.toggle("collapsed", collapsed);
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
@@ -227,7 +300,15 @@ function applySidebarCollapsed(collapsed) {
     if (btn) btn.textContent = collapsed ? "⟩" : "⟨";
 }
 
+// On desktop-width screens the collapse button shrinks the sidebar to
+// icons-only. On narrow / tall screens the sidebar is an off-canvas
+// drawer instead, so the same button should open/close that drawer —
+// otherwise on mobile it silently did nothing useful.
 function toggleSidebarCollapse() {
+    if (isNarrowLayout()) {
+        sidebar.classList.toggle("open");
+        return;
+    }
     applySidebarCollapsed(!sidebar.classList.contains("collapsed"));
 }
 
@@ -371,6 +452,7 @@ function updateModelUI() {
     });
 
     renderModelMenuLocks();
+    renderStatusUI();
 }
 
 // Grey out / lock model options that guests aren't allowed to use, and
@@ -913,6 +995,9 @@ async function sendMessage() {
         renderConversationList();
         renderChat();
         showToast("Beam server connection failed");
+        // Something failed talking to the API — re-check status right away
+        // instead of waiting for the next poll interval.
+        pollHealth();
     } finally {
         // Stop all spinning logos once generation is finished (or failed)
         if (assistantAvatarImg) assistantAvatarImg.classList.remove("spinning");
@@ -985,9 +1070,11 @@ function openModal(type) {
     modal.classList.remove("hidden");
     if (type === "model") {
         const model = MODELS[selectedModel];
+        const online = isModelOnline(selectedModel);
         modalContent.innerHTML = `
             <div class="modal-content">
                 <h2>${model.name}</h2>
+                <p><span class="modal-status-dot ${online ? "" : "offline"}"></span> ${online ? "Online" : "Offline"}</p>
                 <p>${model.description}</p>
                 <p>The selected model is used for new messages in this conversation. You can switch models any time from the sidebar.</p>
             </div>
@@ -1057,6 +1144,8 @@ scrollBottom.addEventListener("click", () => {
 
 chatArea.addEventListener("scroll", updateScrollButton);
 chatSearch.addEventListener("input", renderConversationList);
+
+// Hamburger button: on narrow/tall screens this just opens the drawer.
 mobileMenu.addEventListener("click", () => { sidebar.classList.toggle("open"); });
 
 document.getElementById("collapseButton").addEventListener("click", (event) => {
@@ -1081,8 +1170,8 @@ mobileModelButton.addEventListener("click", event => {
 });
 
 // Delegate model-option clicks so dynamically present buttons (all
-// models, including O1 Flash) work without needing a static NodeList
-// captured at load time.
+// models, including O1 Flash and BeamSyntax 1) work without needing a
+// static NodeList captured at load time.
 modelMenu.addEventListener("click", event => {
     const option = event.target.closest(".model-option");
     if (!option) return;
@@ -1126,6 +1215,15 @@ document.addEventListener("keydown", event => {
     }
 });
 
+// If the viewport is resized/rotated across the narrow-layout breakpoint
+// (e.g. a tall tablet flips, or a window is resized), keep the sidebar
+// state sane instead of getting stuck half-collapsed/half-open.
+window.addEventListener("resize", () => {
+    if (!isNarrowLayout()) {
+        sidebar.classList.remove("open");
+    }
+});
+
 applyTheme(localStorage.getItem(THEME_KEY) || "dark");
 
 const savedAccent = localStorage.getItem(ACCENT_KEY);
@@ -1149,3 +1247,7 @@ if (conversations.length === 0) {
 
 updateComposer();
 resizeInput();
+
+// Kick off live status polling immediately, then keep it refreshed.
+pollHealth();
+setInterval(pollHealth, HEALTH_POLL_MS);
