@@ -127,7 +127,7 @@ const MODELS = {
     "beam-syntax-1": {
         name: "BeamSyntax 1",
         tag: "Coding model",
-        description: "BeamSyntax 1 is heavily focused on coding, recommended for heavy coding"
+        description: "BeamSyntax 1 specializes in coding."
     },
     "beam-o1-flash": {
         name: "Beam o1 Flash",
@@ -960,9 +960,13 @@ async function sendMessage() {
             const { done, value } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
+            const stickToBottom = isNearBottom();
             fullResponseText += chunk;
             assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
-            chatArea.scrollTop = chatArea.scrollHeight;
+            if (stickToBottom) {
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }
+            updateScrollButton();
         }
 
         if (!fullResponseText) {
@@ -1115,6 +1119,14 @@ function openModal(type) {
 
 function closeModal() {
     modal.classList.add("hidden");
+}
+
+// Only auto-scroll during streaming/rendering if the user was already
+// near the bottom — otherwise scrolling up to reread earlier messages
+// gets yanked back down on every incoming chunk.
+function isNearBottom(threshold = 120) {
+    const distance = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight;
+    return distance <= threshold;
 }
 
 function updateScrollButton() {
