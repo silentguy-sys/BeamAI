@@ -799,7 +799,7 @@ function addMessageElement(role, content, timestamp, model) {
 
     if (role === "assistant") {
         const img = document.createElement("img");
-        img.src = "./BeamLogo.png";
+        img.src = "./BeamIcon.png";
         img.alt = "Beam";
         avatar.appendChild(img);
     } else {
@@ -862,7 +862,7 @@ function renderWelcome() {
     welcome.innerHTML = `
         <div class="welcome-hero">
             <div class="hero-logo">
-                <img src="./BeamLogo.png" alt="Beam">
+                <img src="./BeamIcon.png" alt="Beam">
             </div>
             <h1>What can I help with?</h1>
             <p class="welcome-subtitle">
@@ -945,7 +945,7 @@ function showThinking(model) {
 
     thinkingElement.innerHTML =
         '<div class="avatar beam">' +
-            '<img src="./BeamLogo.png" alt="Beam" class="spinning">' +
+            '<img src="./BeamIcon.png" alt="Beam" class="spinning">' +
         '</div>' +
         '<div class="thinking-content">' +
             '<div class="thinking-header">' +
