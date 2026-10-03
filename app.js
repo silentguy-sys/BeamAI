@@ -1080,7 +1080,6 @@ async function sendMessage() {
 
         // Keep the Beam logo spinning on the real message while it streams in
         assistantAvatarImg = assistantMessageElement.querySelector(".avatar.beam img");
-        if (assistantAvatarImg) assistantAvatarImg.classList.add("spinning");
 
         removeThinking();
 
@@ -1142,7 +1141,6 @@ async function sendMessage() {
         pollHealth();
     } finally {
         // Stop all spinning logos once generation is finished (or failed)
-        if (assistantAvatarImg) assistantAvatarImg.classList.remove("spinning");
         setGeneratingState(false);
         thinking = false;
         updateComposer();
