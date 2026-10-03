@@ -99,6 +99,30 @@ const THEME_KEY = "beam_theme_v1";
 const ACCENT_KEY = "beam_accent_v1";
 const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
 const AUTH_KEY = "beam_auth_email_v1";
+const TOKEN_KEY = "beam_auth_token_v1";
+
+function getToken() {
+    return localStorage.getItem(TOKEN_KEY) || null;
+}
+
+// Request body for /chat/stream. The token is how the server knows who you
+// are (and recognises Mason/Groovy), so it is sent with every message.
+function chatBody(sessionId, message, model, guest) {
+    return JSON.stringify({
+        session_id: sessionId,
+        message: message,
+        model: model,
+        guest: guest,
+        token: getToken()
+    });
+}
+
+// Conversations keep a server session id. Sessions belong to an account,
+// so forget them when the account changes and let new ones be created.
+function resetConversationSessions() {
+    conversations.forEach(c => { c.sessionId = null; });
+    saveConversations();
+}
 
 // How often to poll /health for real online/offline status per model.
 const HEALTH_POLL_MS = 10000;
@@ -255,8 +279,10 @@ async function pollHealth() {
 // LOGIN GATE
 // ============================================================
 
+// Logged in = has an email AND a token. Older logins (no token) must log in
+// once more so the server can recognise the account.
 function isLoggedIn() {
-    return !!localStorage.getItem(AUTH_KEY);
+    return !!localStorage.getItem(AUTH_KEY) && !!getToken();
 }
 
 // Guests can still chat, but only with a guest-allowed model. Other
@@ -317,7 +343,7 @@ function toggleSidebarCollapse() {
 // ============================================================
 
 function updateAuthUI() {
-    const email = localStorage.getItem(AUTH_KEY);
+    const email = isLoggedIn() ? localStorage.getItem(AUTH_KEY) : null;
     if (email) {
         authSignedOut.classList.add("hidden");
         authSignedIn.classList.add("visible");
@@ -339,7 +365,16 @@ function updateAuthUI() {
 }
 
 function logout() {
+    const token = getToken();
+    if (token) {
+        fetch(`${API_URL}/logout`, {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + token }
+        }).catch(() => {});
+    }
     localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    resetConversationSessions();
     updateAuthUI();
     showToast("Logged out");
 }
@@ -410,6 +445,8 @@ function openAuthModal(mode) {
             }
 
             localStorage.setItem(AUTH_KEY, data.email);
+            if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+            resetConversationSessions();
             updateAuthUI();
             closeModal();
             showToast(isSignup ? "Account created" : "Logged in");
@@ -908,7 +945,7 @@ async function sendMessage() {
         let response = await fetch(`${API_URL}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed, guest: guestMode })
+            body: chatBody(sessionId, text, modelUsed, guestMode)
         });
 
         if (response.status === 404) {
@@ -918,8 +955,16 @@ async function sendMessage() {
             response = await fetch(`${API_URL}/chat/stream`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ session_id: sessionId, message: text, model: modelUsed, guest: guestMode })
+                body: chatBody(sessionId, text, modelUsed, guestMode)
             });
+        }
+
+        if (response.status === 401) {
+            localStorage.removeItem(AUTH_KEY);
+            localStorage.removeItem(TOKEN_KEY);
+            updateAuthUI();
+            openAuthModal("login");
+            throw new Error("Your login expired. Please log in again.");
         }
 
         if (response.status === 403) {
