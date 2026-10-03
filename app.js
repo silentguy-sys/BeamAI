@@ -117,12 +117,16 @@ function chatBody(sessionId, message, model, guest) {
     });
 }
 
-// Conversations keep a server session id. Sessions belong to an account,
-// so forget them when the account changes and let new ones be created.
-function resetConversationSessions() {
-    conversations.forEach(c => { c.sessionId = null; });
-    saveConversations();
+// Signed-in requests (conversation list/sync/delete).
+function authFetch(path, options) {
+    const opts = Object.assign({}, options || {});
+    opts.headers = Object.assign({}, opts.headers || {});
+    const token = getToken();
+    if (token) opts.headers["Authorization"] = "Bearer " + token;
+    return fetch(`${API_URL}${path}`, opts);
 }
+
+let syncing = false;
 
 // How often to poll /health for real online/offline status per model.
 const HEALTH_POLL_MS = 10000;
@@ -148,10 +152,10 @@ const MODELS = {
         tag: "Advanced model",
         description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
     },
-    "beam-syntax-1": {
-        name: "BeamSyntax 1",
+    "beam-syntax-2": {
+        name: "BeamSyntax 2",
         tag: "Coding model",
-        description: "BeamSyntax 1 specializes in coding."
+        description: "BeamSyntax 2 specializes in coding"
     },
     "beam-o1-flash": {
         name: "Beam o1 Flash",
@@ -197,12 +201,17 @@ const authSignedOut = document.getElementById("authSignedOut");
 const authSignedIn = document.getElementById("authSignedIn");
 const authEmail = document.getElementById("authEmail");
 
-let conversations = loadConversations();
+let conversations = isLoggedIn() ? [] : loadConversations();
 let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
 let selectedModel = localStorage.getItem(MODEL_KEY) || "beam-1";
 let currentView = "chats";
 let thinking = false;
 let thinkingDotsInterval = null;
+
+if (selectedModel === "beam-syntax-1") {
+    selectedModel = "beam-syntax-2";
+    localStorage.setItem(MODEL_KEY, selectedModel);
+}
 
 if (!MODELS[selectedModel]) {
     selectedModel = "beam-1";
@@ -374,8 +383,7 @@ function logout() {
     }
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(TOKEN_KEY);
-    resetConversationSessions();
-    updateAuthUI();
+    onAuthChanged();
     showToast("Logged out");
 }
 
@@ -446,8 +454,7 @@ function openAuthModal(mode) {
 
             localStorage.setItem(AUTH_KEY, data.email);
             if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
-            resetConversationSessions();
-            updateAuthUI();
+            await onAuthChanged();
             closeModal();
             showToast(isSignup ? "Account created" : "Logged in");
 
@@ -475,6 +482,7 @@ function loadConversations() {
 }
 
 function saveConversations() {
+    if (isLoggedIn()) return;   // signed-in chats are stored on the server and synced
     localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
 }
 
@@ -536,7 +544,8 @@ function createConversation() {
     const now = Date.now();
     const conversation = {
         id: crypto.randomUUID(),
-        sessionId: null,
+        remote: false,
+        loaded: true,
         title: "New conversation",
         messages: [],
         createdAt: now,
@@ -563,22 +572,106 @@ function ensureActiveConversation() {
     return conversation;
 }
 
-async function createSession(conversation) {
-    const response = await fetch(`${API_URL}/session`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-    });
-    if (!response.ok) throw new Error(`Session creation failed (${response.status})`);
-    const data = await response.json();
-    conversation.sessionId = data.session_id;
-    conversation.updatedAt = Date.now();
-    saveConversations();
-    return data.session_id;
+function expireLogin() {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    onAuthChanged();
+    openAuthModal("login");
 }
 
-async function ensureSession(conversation) {
-    if (conversation.sessionId) return conversation.sessionId;
-    return await createSession(conversation);
+// Called after login / logout / expiry: swap between this browser's guest chats
+// and the signed-in account's chats from the server.
+async function onAuthChanged() {
+    const loggedIn = isLoggedIn();
+    conversations = loggedIn ? [] : loadConversations();
+    activeConversationId = localStorage.getItem(ACTIVE_KEY);
+    if (loggedIn) await syncConversations(true);
+    if (!getActiveConversation()) {
+        if (conversations.length) {
+            activeConversationId = conversations[0].id;
+            localStorage.setItem(ACTIVE_KEY, activeConversationId);
+        } else {
+            createConversation();
+        }
+    }
+    updateAuthUI();
+    renderConversationList();
+    renderChat();
+}
+
+async function loadConversationMessages(conv) {
+    const token = getToken();
+    try {
+        const r = await authFetch(`/conversations/${encodeURIComponent(conv.id)}`, { cache: "no-store" });
+        if (r.status === 401) { expireLogin(); return; }
+        if (!r.ok || getToken() !== token) return;
+        const d = await r.json();
+        conv.messages = (d.messages || []).map(m => ({
+            role: m.role,
+            content: m.content,
+            timestamp: Math.round(m.ts * 1000),
+            model: m.model || undefined
+        }));
+        conv.loaded = true;
+    } catch {}
+}
+
+// Pull this account's conversation list from the server (cross-device sync).
+async function syncConversations(force) {
+    if (!isLoggedIn() || syncing || (thinking && !force)) return;
+    syncing = true;
+    const token = getToken();
+    try {
+        const r = await authFetch("/conversations", { cache: "no-store" });
+        if (r.status === 401) { expireLogin(); return; }
+        if (!r.ok) return;
+        const data = await r.json();
+        if (getToken() !== token) return;   // account changed while we were waiting
+
+        const before = activeConversationId;
+        const old = new Map(conversations.map(c => [c.id, c]));
+        const merged = (data.conversations || []).map(sv => {
+            const prev = old.get(sv.id);
+            const localCount = prev ? prev.messages.filter(m => !m.transient).length : -1;
+            const keep = !!(prev && prev.loaded !== false && localCount === sv.count);
+            return {
+                id: sv.id,
+                title: sv.title,
+                createdAt: sv.created * 1000,
+                updatedAt: sv.updated * 1000,
+                messages: keep ? prev.messages : [],
+                loaded: keep,
+                remote: true
+            };
+        });
+        // keep a blank chat that hasn't been sent yet
+        conversations.forEach(c => {
+            if (!c.remote && c.messages.length === 0 && !merged.some(m => m.id === c.id)) merged.push(c);
+        });
+        conversations = merged;
+
+        if (!getActiveConversation()) {
+            if (conversations.length) {
+                activeConversationId = conversations[0].id;
+                localStorage.setItem(ACTIVE_KEY, activeConversationId);
+            } else {
+                createConversation();
+                return;
+            }
+        }
+
+        let rerender = activeConversationId !== before;
+        const active = getActiveConversation();
+        if (active && active.remote && active.loaded === false) {
+            await loadConversationMessages(active);
+            rerender = true;
+        }
+        renderConversationList();
+        if (rerender && !thinking) renderChat();
+    } catch {
+    } finally {
+        syncing = false;
+    }
 }
 
 function formatTime(timestamp) {
@@ -661,6 +754,10 @@ function renderConversationList() {
 }
 
 function deleteConversation(id) {
+    const target = conversations.find(c => c.id === id);
+    if (target && target.remote && isLoggedIn()) {
+        authFetch(`/conversations/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+    }
     conversations = conversations.filter(c => c.id !== id);
     saveConversations();
 
@@ -674,19 +771,23 @@ function deleteConversation(id) {
         }
     }
     renderConversationList();
-    renderChat();
+    if (activeConversationId && !thinking) { openConversation(activeConversationId); } else { renderChat(); }
     showToast("Conversation deleted");
 }
 
-function openConversation(id) {
+async function openConversation(id) {
     if (thinking) return;
     const conversation = conversations.find(c => c.id === id);
     if (!conversation) return;
     activeConversationId = id;
     localStorage.setItem(ACTIVE_KEY, id);
-    renderConversationList();
-    renderChat();
     sidebar.classList.remove("open");
+    renderConversationList();
+    if (conversation.remote && conversation.loaded === false) {
+        chatArea.innerHTML = '<div class="welcome"><p class="welcome-subtitle">Loading conversation...</p></div>';
+        await loadConversationMessages(conversation);
+    }
+    if (activeConversationId === id) renderChat();
 }
 
 function addMessageElement(role, content, timestamp, model) {
@@ -941,29 +1042,14 @@ async function sendMessage() {
     let fullResponseText = "";
 
     try {
-        let sessionId = await ensureSession(conversation);
-        let response = await fetch(`${API_URL}/chat/stream`, {
+        const response = await fetch(`${API_URL}/chat/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: chatBody(sessionId, text, modelUsed, guestMode)
+            body: chatBody(conversation.id, text, modelUsed, guestMode)
         });
 
-        if (response.status === 404) {
-            conversation.sessionId = null;
-            saveConversations();
-            sessionId = await createSession(conversation);
-            response = await fetch(`${API_URL}/chat/stream`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: chatBody(sessionId, text, modelUsed, guestMode)
-            });
-        }
-
         if (response.status === 401) {
-            localStorage.removeItem(AUTH_KEY);
-            localStorage.removeItem(TOKEN_KEY);
-            updateAuthUI();
-            openAuthModal("login");
+            expireLogin();
             throw new Error("Your login expired. Please log in again.");
         }
 
@@ -1025,6 +1111,10 @@ async function sendMessage() {
             timestamp: Date.now(),
             model: modelUsed
         });
+        if (!guestMode) {
+            conversation.remote = true;
+            conversation.loaded = true;
+        }
         conversation.updatedAt = Date.now();
         saveConversations();
         renderConversationList();
@@ -1034,10 +1124,13 @@ async function sendMessage() {
         if (assistantMessageElement) assistantMessageElement.remove();
         assistantAvatarImg = null;
 
+        const lastMsg = conversation.messages[conversation.messages.length - 1];
+        if (lastMsg && lastMsg.role === "user") lastMsg.transient = true;   // never reached the server
         conversation.messages.push({
             role: "assistant",
             content: "I couldn't reach the Beam server.\n\n" + error.message,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            transient: true
         });
         conversation.updatedAt = Date.now();
         saveConversations();
@@ -1054,11 +1147,17 @@ async function sendMessage() {
         thinking = false;
         updateComposer();
         messageInput.focus();
+        if (isLoggedIn()) syncConversations();
     }
 }
 
 function newChat() {
     if (thinking) return;
+    const current = getActiveConversation();
+    if (current && !current.remote && current.messages.length === 0) {   // already a blank chat
+        messageInput.focus();
+        return;
+    }
     createConversation();
     messageInput.focus();
 }
@@ -1067,10 +1166,17 @@ function clearCurrentConversation() {
     if (thinking) return;
     const conversation = getActiveConversation();
     if (!conversation) return;
+    if (conversation.remote && isLoggedIn()) {
+        authFetch(`/conversations/${encodeURIComponent(conversation.id)}`, { method: "DELETE" }).catch(() => {});
+    }
+    conversation.id = crypto.randomUUID();      // fresh conversation id = fresh server session
+    activeConversationId = conversation.id;
+    localStorage.setItem(ACTIVE_KEY, activeConversationId);
+    conversation.remote = false;
+    conversation.loaded = true;
     conversation.messages = [];
     conversation.title = "New conversation";
     conversation.updatedAt = Date.now();
-    conversation.sessionId = null;
     saveConversations();
     renderConversationList();
     renderChat();
@@ -1227,7 +1333,7 @@ mobileModelButton.addEventListener("click", event => {
 });
 
 // Delegate model-option clicks so dynamically present buttons (all
-// models, including O1 Flash and BeamSyntax 1) work without needing a
+// models, including O1 Flash and BeamSyntax 2) work without needing a
 // static NodeList captured at load time.
 modelMenu.addEventListener("click", event => {
     const option = event.target.closest(".model-option");
@@ -1286,11 +1392,20 @@ applyTheme(localStorage.getItem(THEME_KEY) || "dark");
 const savedAccent = localStorage.getItem(ACCENT_KEY);
 if (savedAccent) applyAccent(savedAccent);
 
+// BeamSyntax 1 is discontinued: relabel the old menu entry as BeamSyntax 2.
+document.querySelectorAll('.model-option[data-model="beam-syntax-1"]').forEach(option => {
+    option.dataset.model = "beam-syntax-2";
+    const label = option.querySelector("strong");
+    if (label) label.textContent = "BeamSyntax 2";
+});
+
 applySidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
 updateAuthUI();
 updateModelUI();
 
-if (conversations.length === 0) {
+if (isLoggedIn()) {
+    onAuthChanged();
+} else if (conversations.length === 0) {
     createConversation();
 } else {
     if (!getActiveConversation()) {
@@ -1308,3 +1423,9 @@ resizeInput();
 // Kick off live status polling immediately, then keep it refreshed.
 pollHealth();
 setInterval(pollHealth, HEALTH_POLL_MS);
+
+// Keep signed-in chats in sync with other devices.
+setInterval(() => { if (isLoggedIn() && !thinking) syncConversations(); }, 20000);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && isLoggedIn() && !thinking) syncConversations();
+});
