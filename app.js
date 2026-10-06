@@ -90,7 +90,7 @@ window.copyCodeSnippet = function(button) {
     });
 };
 
-const API_URL = "https://nuclearbomb.tailfff298.ts.net";
+const API_URL = "https://earthwarmer2000ultimate.tailfff298.ts.net";
 
 const STORAGE_KEY = "beam_conversations_v2";
 const ACTIVE_KEY = "beam_active_conversation_v2";
