@@ -157,6 +157,11 @@ const MODELS = {
         tag: "Coding model",
         description: "BeamSyntax 2 specializes in coding"
     },
+    "beam-syntax-3": {
+        name: "BeamSyntax 3",
+        tag: "Coding model",
+        description: "Very efficient, specializes in coding"
+    },
     "beam-o1-flash": {
         name: "Beam o1 Flash",
         tag: "Very Mini model",
