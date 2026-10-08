@@ -162,6 +162,11 @@ const MODELS = {
         tag: "Coding model",
         description: "Very efficient, specializes in coding"
     },
+    "beam-coder-1": {
+        name: "BeamCoder 1",
+        tag: "Advanced Coder model",
+        description: "Step up from BeamSyntax."
+    },
     "beam-o1-flash": {
         name: "Beam o1 Flash",
         tag: "Very Mini model",
