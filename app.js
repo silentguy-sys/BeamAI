@@ -1,632 +1,467 @@
-function parseMarkdown(text) {
-    if (!text) return "";
-
-    var escaped = text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-    var lines = escaped.split("\n");
-    var result = [];
-    var inCodeBlock = false;
-    var codeContent = [];
-    var codeLang = "code";
-
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-
-        if (line.trim().indexOf("```") === 0) {
-            if (!inCodeBlock) {
-                inCodeBlock = true;
-                codeLang = line.trim().slice(3).trim() || "code";
-                codeContent = [];
-            } else {
-                inCodeBlock = false;
-                var blockHtml = '<div class="code-block-container">' +
-                                    '<div class="code-block-header">' +
-                                        '<span class="code-block-lang">' + codeLang + '</span>' +
-                                        '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
-                                    '</div>' +
-                                    '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
-                                '</div>';
-                result.push(blockHtml);
-            }
-            continue;
-        }
-
-        if (inCodeBlock) {
-            codeContent.push(line);
-            continue;
-        }
-
-        var trimmed = line.trim();
-
-        if (trimmed.indexOf("### ") === 0) {
-            line = "<h3>" + trimmed.slice(4) + "</h3>";
-        } else if (trimmed.indexOf("## ") === 0) {
-            line = "<h2>" + trimmed.slice(3) + "</h2>";
-        } else if (trimmed.indexOf("# ") === 0) {
-            line = "<h1>" + trimmed.slice(2) + "</h1>";
-        }
-
-        if (trimmed.indexOf("- ") === 0) {
-            line = "<li>" + trimmed.slice(2) + "</li>";
-        }
-
-        line = line.replace(/\*\*([\s\S]*?)\*\*/g, "<strong>$1</strong>");
-        line = line.replace(/\*([\s\S]*?)\*/g, "<em>$1</em>");
-        line = line.replace(/`([^`\n]+)`/g, "<code>$1</code>");
-
-        result.push(line);
-    }
-
-    if (inCodeBlock && codeContent.length > 0) {
-        var ongoingBlockHtml = '<div class="code-block-container">' +
-                            '<div class="code-block-header">' +
-                                '<span class="code-block-lang">' + codeLang + '</span>' +
-                                '<button class="code-block-copy-btn" onclick="copyCodeSnippet(this)">Copy</button>' +
-                            '</div>' +
-                            '<pre><code class="language-' + codeLang + '">' + codeContent.join("\n") + '</code></pre>' +
-                        '</div>';
-        result.push(ongoingBlockHtml);
-    }
-
-    return result.join("\n");
-}
-
-window.copyCodeSnippet = function(button) {
-    var container = button.closest('.code-block-container');
-    var codeText = container.querySelector('code').textContent;
-
-    navigator.clipboard.writeText(codeText).then(function() {
-        button.textContent = "Copied!";
-        button.classList.add('copied');
-        setTimeout(function() {
-            button.textContent = "Copy";
-            button.classList.remove('copied');
-        }, 2000);
-    }).catch(function() {
-        button.textContent = "Failed";
-    });
-};
+/* =====================================================================
+   Beam frontend — vanilla JS
+   Backend: Beam Server (FastAPI). Endpoints used (all from the original
+   source): /health, /signup, /login, /logout, /chat/stream,
+   /conversations, /conversations/{id}.
+   ===================================================================== */
 
 const API_URL = "https://earthwarmer2000ultimate.tailfff298.ts.net";
 
+/* ---- Easy-to-edit configuration ----------------------------------- */
+
+// Model list. `syntaxCode: true` means the Syntax Code toggle is shown for
+// that model. When the toggle is on, "/code " is silently prefixed to the
+// message sent to the server (see chatBody).
+const MODELS = {
+    "beam-1":        { name: "Beam 1",        desc: "Daily use, light coding, and talking.",              syntaxCode: false },
+    "beam-1-fol":    { name: "Beam 1 Fol",    desc: "Stronger coding and conversation than Beam 1.",      syntaxCode: false },
+    "beam-syntax-3": { name: "BeamSyntax 3",  desc: "Efficient, specializes in coding.",                  syntaxCode: true  },
+    "beam-coder-1":  { name: "BeamCoder 1",   desc: "A step up from BeamSyntax. Advanced coder.",         syntaxCode: true  },
+    "beam-o2":       { name: "Beam o2",       desc: "Mini model, lighter usage, made for talking.",       syntaxCode: false },
+    "beam-o1-flash": { name: "Beam o1 Flash", desc: "Fast and light. Only model available without login.", syntaxCode: false }
+};
+const DEFAULT_MODEL = "beam-1";
+const GUEST_ALLOWED_MODELS = ["beam-o1-flash"];   // keep in sync with the server
+const GUEST_DEFAULT_MODEL = "beam-o1-flash";
+
+// Memory retrieval endpoint. The original files contain no memory API, so it
+// is unset. Set to e.g. "/memory" once the real path is known; the request is
+// sent as GET with the Bearer token.
+const MEMORY_ENDPOINT = null;
+
+const HEALTH_POLL_MS = 10000;
+const ACCENTS = ["#42d97b", "#4f8cff", "#a87bff", "#ff7a59", "#ffc247", "#ff5fa2"];
+
+/* ---- Storage keys (unchanged so existing data keeps working) ------- */
 const STORAGE_KEY = "beam_conversations_v2";
 const ACTIVE_KEY = "beam_active_conversation_v2";
 const MODEL_KEY = "beam_selected_model_v1";
 const THEME_KEY = "beam_theme_v1";
 const ACCENT_KEY = "beam_accent_v1";
-const SIDEBAR_COLLAPSED_KEY = "beam_sidebar_collapsed_v1";
+const SIDEBAR_KEY = "beam_sidebar_collapsed_v1";
 const AUTH_KEY = "beam_auth_email_v1";
 const TOKEN_KEY = "beam_auth_token_v1";
+const SYNTAX_KEY = "beam_syntax_code_v1";
 
-function getToken() {
-    return localStorage.getItem(TOKEN_KEY) || null;
+/* ---- DOM ---------------------------------------------------------- */
+const $ = id => document.getElementById(id);
+const chatArea = $("chatArea"), messageInput = $("messageInput"), sendButton = $("sendButton");
+const sidebar = $("sidebar"), scrim = $("scrim"), modal = $("modal"), modalContent = $("modalContent");
+const modelMenu = $("modelMenu"), modelButton = $("modelButton"), syntaxToggle = $("syntaxToggle");
+const profileMenu = $("profileMenu");
+
+/* ---- State -------------------------------------------------------- */
+let modelStatus = null;           // null = not checked yet
+let thinking = false;
+let syncing = false;
+let currentView = "chats";
+let syntaxActive = localStorage.getItem(SYNTAX_KEY) === "1";
+let conversations = [];
+let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
+let selectedModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
+
+/* ===================================================================
+   Markdown (escape first, then format — never inserts raw HTML)
+   =================================================================== */
+function inlineMd(s) {
+    const codes = [];
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return "\u0000" + (codes.length - 1) + "\u0000"; });
+    s = s.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1<em>$2</em>");
+    return s.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + codes[+i] + "</code>");
 }
 
-// Request body for /chat/stream. The token is how the server knows who you
-// are (and recognises Mason/Groovy), so it is sent with every message.
-function chatBody(sessionId, message, model, guest) {
-    return JSON.stringify({
-        session_id: sessionId,
-        message: message,
-        model: model,
-        guest: guest,
-        token: getToken()
-    });
+function parseMarkdown(text) {
+    if (!text) return "";
+    const lines = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").split("\n");
+    const out = [];
+    let inCode = false, code = [], lang = "code", list = null, para = [];
+
+    const flushPara = () => { if (para.length) { out.push("<p>" + inlineMd(para.join("<br>")) + "</p>"); para = []; } };
+    const flushList = () => { if (list) { out.push("</" + list + ">"); list = null; } };
+    const codeHtml = () =>
+        '<div class="code-block-container"><div class="code-block-header"><span class="code-block-lang">' + lang +
+        '</span><button class="code-block-copy-btn" data-copy-code>Copy</button></div><pre><code>' + code.join("\n") + "</code></pre></div>";
+
+    for (const line of lines) {
+        const t = line.trim();
+        if (t.startsWith("```")) {
+            if (!inCode) {
+                flushPara(); flushList();
+                inCode = true; code = [];
+                lang = t.slice(3).trim().replace(/[^a-zA-Z0-9+#._-]/g, "").slice(0, 20) || "code";
+            } else { inCode = false; out.push(codeHtml()); }
+            continue;
+        }
+        if (inCode) { code.push(line); continue; }
+
+        let m;
+        if ((m = t.match(/^(#{1,3})\s+(.*)$/))) {
+            flushPara(); flushList();
+            out.push("<h" + m[1].length + ">" + inlineMd(m[2]) + "</h" + m[1].length + ">");
+        } else if ((m = t.match(/^[-*]\s+(.*)$/))) {
+            flushPara();
+            if (list !== "ul") { flushList(); out.push("<ul>"); list = "ul"; }
+            out.push("<li>" + inlineMd(m[1]) + "</li>");
+        } else if ((m = t.match(/^\d+[.)]\s+(.*)$/))) {
+            flushPara();
+            if (list !== "ol") { flushList(); out.push("<ol>"); list = "ol"; }
+            out.push("<li>" + inlineMd(m[1]) + "</li>");
+        } else if (t === "") {
+            flushPara(); flushList();
+        } else {
+            flushList(); para.push(t);
+        }
+    }
+    flushPara(); flushList();
+    if (inCode) out.push(codeHtml());   // unfinished block while streaming
+    return out.join("");
 }
 
-// Signed-in requests (conversation list/sync/delete).
+document.addEventListener("click", e => {
+    const btn = e.target.closest("[data-copy-code]");
+    if (!btn) return;
+    const text = btn.closest(".code-block-container").querySelector("code").textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = "Copied"; btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1800);
+    }).catch(() => { btn.textContent = "Failed"; });
+});
+
+/* ===================================================================
+   Auth helpers
+   =================================================================== */
+const getToken = () => localStorage.getItem(TOKEN_KEY) || null;
+const isLoggedIn = () => !!localStorage.getItem(AUTH_KEY) && !!getToken();
+
 function authFetch(path, options) {
     const opts = Object.assign({}, options || {});
     opts.headers = Object.assign({}, opts.headers || {});
     const token = getToken();
     if (token) opts.headers["Authorization"] = "Bearer " + token;
-    return fetch(`${API_URL}${path}`, opts);
+    return fetch(API_URL + path, opts);
 }
 
-let syncing = false;
+// Syntax Code mode: the server's existing /code command does the work, so we
+// prefix the outgoing message with "/code ". The user never sees the prefix.
+const SYNTAX_PREFIX = "/code ";
+function chatBody(sessionId, message, model, guest, syntaxCode) {
+    const outgoing = syntaxCode ? SYNTAX_PREFIX + message : message;
+    return JSON.stringify({ session_id: sessionId, message: outgoing, model, guest, token: getToken() });
+}
+// Server-stored history contains the prefix; hide it when displaying.
+const stripSyntaxPrefix = s => (typeof s === "string" && s.startsWith(SYNTAX_PREFIX)) ? s.slice(SYNTAX_PREFIX.length) : s;
 
-// How often to poll /health for real online/offline status per model.
-const HEALTH_POLL_MS = 10000;
-
-// Models that guests (not logged in) are allowed to use. Keep this in
-// sync with GUEST_ALLOWED_MODELS on the server.
-const GUEST_ALLOWED_MODELS = ["beam-o1-flash"];
-const GUEST_DEFAULT_MODEL = "beam-o1-flash";
-
-const MODELS = {
-    "beam-1": {
-        name: "Beam 1",
-        tag: "Main model",
-        description: "Beam 1 is good for daily usage for some slight coding and talking with."
-    },
-    "beam-o2": {
-        name: "Beam o2",
-        tag: "Mini model",
-        description: "Beam o2 is a mini model, using less usage and not for coding, specifically made to talk with."
-    },
-    "beam-1-fol": {
-        name: "Beam 1 Fol",
-        tag: "Advanced model",
-        description: "Beam 1 Fol is good for coding and stuff and also talking stuff, better than Beam 1."
-    },
-    "beam-syntax-2": {
-        name: "BeamSyntax 2",
-        tag: "Coding model",
-        description: "BeamSyntax 2 specializes in coding"
-    },
-    "beam-syntax-3": {
-        name: "BeamSyntax 3",
-        tag: "Coding model",
-        description: "Very efficient, specializes in coding"
-    },
-    "beam-coder-1": {
-        name: "BeamCoder 1",
-        tag: "Advanced Coder model",
-        description: "Step up from BeamSyntax."
-    },
-    "beam-o1-flash": {
-        name: "Beam o1 Flash",
-        tag: "Very Mini model",
-        description: "O1 Flash is a fast, lightweight model. It's the only model you can talk to without logging in."
-    }
-};
-
-// Live status per model, filled in by pollHealth(). Until the first
-// poll completes we assume nothing is confirmed online.
-let modelStatus = {};
-
-const chatArea = document.getElementById("chatArea");
-const messageInput = document.getElementById("messageInput");
-const sendButton = document.getElementById("sendButton");
-const newChatButton = document.getElementById("newChatButton");
-const conversationList = document.getElementById("conversationList");
-const emptyConversations = document.getElementById("emptyConversations");
-const conversationCount = document.getElementById("conversationCount");
-const conversationHeading = document.getElementById("conversationHeading");
-const chatSearch = document.getElementById("chatSearch");
-const mobileMenu = document.getElementById("mobileMenu");
-const sidebar = document.getElementById("sidebar");
-const exportButton = document.getElementById("exportButton");
-const clearButton = document.getElementById("clearButton");
-const scrollBottom = document.getElementById("scrollBottom");
-const modal = document.getElementById("modal");
-const modalClose = document.getElementById("modalClose");
-const modalContent = document.getElementById("modalContent");
-const toastContainer = document.getElementById("toastContainer");
-
-const modelSelector = document.getElementById("modelSelector");
-const modelMenu = document.getElementById("modelMenu");
-const selectedModelName = document.getElementById("selectedModelName");
-const topModelName = document.getElementById("topModelName");
-const mobileModelName = document.getElementById("mobileModelName");
-const mobileModelButton = document.getElementById("mobileModelButton");
-const topStatusPill = document.getElementById("topStatusPill");
-const topStatusText = document.getElementById("topStatusText");
-const sidebarStatusText = document.getElementById("sidebarStatusText");
-
-const authSignedOut = document.getElementById("authSignedOut");
-const authSignedIn = document.getElementById("authSignedIn");
-const authEmail = document.getElementById("authEmail");
-
-let conversations = isLoggedIn() ? [] : loadConversations();
-let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
-let selectedModel = localStorage.getItem(MODEL_KEY) || "beam-1";
-let currentView = "chats";
-let thinking = false;
-let thinkingDotsInterval = null;
-
-if (selectedModel === "beam-syntax-1") {
-    selectedModel = "beam-syntax-2";
-    localStorage.setItem(MODEL_KEY, selectedModel);
+/* ===================================================================
+   Model selection (obsolete ids are never selectable or sent)
+   =================================================================== */
+function sanitizeModel(id) {
+    if (!MODELS[id]) return isLoggedIn() ? DEFAULT_MODEL : GUEST_DEFAULT_MODEL;
+    if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id)) return GUEST_DEFAULT_MODEL;
+    return id;
 }
 
-if (!MODELS[selectedModel]) {
-    selectedModel = "beam-1";
-}
-
-// If we're not logged in on load and the remembered model isn't guest
-// accessible, fall back to the guest model so the composer works.
-if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(selectedModel)) {
-    selectedModel = GUEST_DEFAULT_MODEL;
-    localStorage.setItem(MODEL_KEY, selectedModel);
-}
-
-// ============================================================
-// LOGO SPIN STATE
-// ============================================================
-
-function setGeneratingState(isGenerating) {
-    document.body.classList.toggle("is-generating", isGenerating);
-}
-
-// ============================================================
-// LIVE HEALTH / ONLINE STATUS
-// ============================================================
-
-function isModelOnline(model) {
-    const status = modelStatus[model];
-    return !!(status && status.running);
-}
-
-function renderStatusUI() {
-    const online = isModelOnline(selectedModel);
-
-    // Sidebar model-selector pill
-    if (sidebarStatusText) {
-        sidebarStatusText.textContent = online ? "Online" : "Offline";
-        sidebarStatusText.classList.toggle("offline", !online);
-    }
-
-    // Top bar status pill
-    if (topStatusPill) {
-        topStatusPill.classList.toggle("offline", !online);
-    }
-    if (topStatusText) {
-        topStatusText.textContent = online ? "Online" : "Offline";
-    }
-
-    // Grey out / dot each entry in the model dropdown menu
-    document.querySelectorAll(".model-option").forEach(option => {
-        const model = option.dataset.model;
-        const dot = option.querySelector(".model-option-dot");
-        if (dot) {
-            dot.classList.toggle("offline", !isModelOnline(model));
-        }
-    });
-}
-
-async function pollHealth() {
-    try {
-        const response = await fetch(`${API_URL}/health`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`Health check failed (${response.status})`);
-        const data = await response.json();
-        modelStatus = data.models || {};
-    } catch (err) {
-        // Server unreachable entirely: mark everything offline rather than
-        // leaving stale "online" state on screen.
-        const cleared = {};
-        Object.keys(modelStatus).forEach(key => { cleared[key] = { running: false }; });
-        modelStatus = cleared;
-    }
-    renderStatusUI();
-}
-
-// ============================================================
-// LOGIN GATE
-// ============================================================
-
-// Logged in = has an email AND a token. Older logins (no token) must log in
-// once more so the server can recognise the account.
-function isLoggedIn() {
-    return !!localStorage.getItem(AUTH_KEY) && !!getToken();
-}
-
-// Guests can still chat, but only with a guest-allowed model. Other
-// models require login. Returns true if the current state is OK to send.
-function canUseModel(model) {
-    if (isLoggedIn()) return true;
-    return GUEST_ALLOWED_MODELS.includes(model);
-}
-
-function requireLogin() {
-    if (isLoggedIn()) return true;
-    showToast("Please log in to use Beam");
-    openAuthModal("login");
-    return false;
-}
-
-// ============================================================
-// THEME / ACCENT / SIDEBAR COLLAPSE
-// ============================================================
-
-function applyTheme(theme) {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_KEY, theme);
-}
-
-function applyAccent(color) {
-    document.documentElement.style.setProperty("--accent", color);
-    localStorage.setItem(ACCENT_KEY, color);
-}
-
-// True when the layout is running the narrow / mobile-style breakpoint,
-// which includes tall vertical phone/tablet screens.
-function isNarrowLayout() {
-    return window.matchMedia("(max-width: 800px)").matches;
-}
-
-function applySidebarCollapsed(collapsed) {
-    sidebar.classList.toggle("collapsed", collapsed);
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
-    const btn = document.getElementById("collapseButton");
-    if (btn) btn.textContent = collapsed ? "⟩" : "⟨";
-}
-
-// On desktop-width screens the collapse button shrinks the sidebar to
-// icons-only. On narrow / tall screens the sidebar is an off-canvas
-// drawer instead, so the same button should open/close that drawer —
-// otherwise on mobile it silently did nothing useful.
-function toggleSidebarCollapse() {
-    if (isNarrowLayout()) {
-        sidebar.classList.toggle("open");
-        return;
-    }
-    applySidebarCollapsed(!sidebar.classList.contains("collapsed"));
-}
-
-// ============================================================
-// AUTH
-// ============================================================
-
-function updateAuthUI() {
-    const email = isLoggedIn() ? localStorage.getItem(AUTH_KEY) : null;
-    if (email) {
-        authSignedOut.classList.add("hidden");
-        authSignedIn.classList.add("visible");
-        authEmail.textContent = email;
-    } else {
-        authSignedOut.classList.remove("hidden");
-        authSignedIn.classList.remove("visible");
-        authEmail.textContent = "";
-
-        // Logged out: force back to a guest-usable model if needed.
-        if (!GUEST_ALLOWED_MODELS.includes(selectedModel)) {
-            selectedModel = GUEST_DEFAULT_MODEL;
-            localStorage.setItem(MODEL_KEY, selectedModel);
-            updateModelUI();
-        }
-    }
-    updateComposer();
-    renderModelMenuLocks();
-}
-
-function logout() {
-    const token = getToken();
-    if (token) {
-        fetch(`${API_URL}/logout`, {
-            method: "POST",
-            headers: { "Authorization": "Bearer " + token }
-        }).catch(() => {});
-    }
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    onAuthChanged();
-    showToast("Logged out");
-}
-
-function openAuthModal(mode) {
-    modal.classList.remove("hidden");
-
-    const isSignup = mode === "signup";
-
-    modalContent.innerHTML = `
-        <div class="modal-content">
-            <h2>${isSignup ? "Create account" : "Log in"}</h2>
-            <p>${isSignup ? "Sign up to save your Beam account." : "Welcome back."}</p>
-            <div class="form-field">
-                <label>Email</label>
-                <input type="email" id="authEmailInput" autocomplete="email">
-            </div>
-            <div class="form-field">
-                <label>Password</label>
-                <input type="password" id="authPasswordInput" autocomplete="${isSignup ? "new-password" : "current-password"}">
-            </div>
-            <input type="text" id="authWebsiteInput" class="honeypot-field" tabindex="-1" autocomplete="off">
-            <div class="form-error" id="authFormError"></div>
-            <button class="form-submit" id="authSubmitBtn">${isSignup ? "Sign up" : "Log in"}</button>
-            <div class="form-switch">
-                ${isSignup
-                    ? `Already have an account? <a id="authSwitchLink">Log in</a>`
-                    : `Don't have an account? <a id="authSwitchLink">Sign up</a>`
-                }
-            </div>
-        </div>
-    `;
-
-    document.getElementById("authSwitchLink").addEventListener("click", () => {
-        openAuthModal(isSignup ? "login" : "signup");
-    });
-
-    document.getElementById("authSubmitBtn").addEventListener("click", async () => {
-        const email = document.getElementById("authEmailInput").value.trim();
-        const password = document.getElementById("authPasswordInput").value;
-        const website = document.getElementById("authWebsiteInput").value;
-        const errorEl = document.getElementById("authFormError");
-        const submitBtn = document.getElementById("authSubmitBtn");
-
-        errorEl.classList.remove("visible");
-        errorEl.textContent = "";
-
-        if (!email || !password) {
-            errorEl.textContent = "Please fill in both fields.";
-            errorEl.classList.add("visible");
-            return;
-        }
-
-        submitBtn.disabled = true;
-        submitBtn.textContent = isSignup ? "Signing up..." : "Logging in...";
-
-        try {
-            const response = await fetch(`${API_URL}/${isSignup ? "signup" : "login"}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password, website })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.detail || "Something went wrong.");
-            }
-
-            localStorage.setItem(AUTH_KEY, data.email);
-            if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
-            await onAuthChanged();
-            closeModal();
-            showToast(isSignup ? "Account created" : "Logged in");
-
-        } catch (err) {
-            errorEl.textContent = err.message;
-            errorEl.classList.add("visible");
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = isSignup ? "Sign up" : "Log in";
-        }
-    });
-}
-
-// ============================================================
-// CONVERSATIONS
-// ============================================================
-
-function loadConversations() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        return Array.isArray(saved) ? saved : [];
-    } catch {
-        return [];
+function renderModelMenu() {
+    modelMenu.innerHTML = "";
+    for (const [id, m] of Object.entries(MODELS)) {
+        const locked = !isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id);
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "model-option" + (id === selectedModel ? " active" : "") + (locked ? " locked" : "");
+        b.dataset.model = id;
+        b.setAttribute("role", "option");
+        b.title = locked ? "Log in to use this model" : "";
+        b.innerHTML = '<span class="chip-dot ' + dotClass(id) + '"></span><span class="mo-main"><strong></strong><span class="mo-desc"></span></span><span class="mo-check">✓</span>';
+        b.querySelector("strong").textContent = m.name;
+        b.querySelector(".mo-desc").textContent = m.desc + (locked ? " (log in)" : "");
+        modelMenu.appendChild(b);
     }
 }
 
-function saveConversations() {
-    if (isLoggedIn()) return;   // signed-in chats are stored on the server and synced
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+function dotClass(id) {
+    if (!modelStatus) return "";
+    return modelStatus[id] && modelStatus[id].running ? "online" : "offline";
 }
 
 function updateModelUI() {
-    const model = MODELS[selectedModel];
-    selectedModelName.textContent = model.name;
-    topModelName.textContent = model.name;
-    mobileModelName.textContent = model.name;
+    const m = MODELS[selectedModel];
+    $("modelButtonName").textContent = m.name;
+    $("topModelName").textContent = m.name;
+    $("modelDot").className = "chip-dot " + dotClass(selectedModel);
 
-    document.querySelectorAll(".model-option").forEach(option => {
-        option.classList.toggle("active", option.dataset.model === selectedModel);
-    });
+    // Syntax Code: only for models flagged as supporting it
+    const supported = !!m.syntaxCode;
+    syntaxToggle.classList.toggle("hidden", !supported);
+    const on = supported && syntaxActive;
+    syntaxToggle.setAttribute("aria-pressed", on ? "true" : "false");
 
-    renderModelMenuLocks();
-    renderStatusUI();
+    const pill = $("topStatusPill");
+    pill.classList.toggle("online", !!modelStatus && dotClass(selectedModel) === "online");
+    pill.classList.toggle("offline", !!modelStatus && dotClass(selectedModel) === "offline");
+    $("topStatusText").textContent = !modelStatus ? "Checking…" : (dotClass(selectedModel) === "online" ? "Online" : "Offline");
+    renderModelMenu();
 }
 
-// Grey out / lock model options that guests aren't allowed to use, and
-// label the guest-usable one so it's clear why it's special.
-function renderModelMenuLocks() {
-    const loggedIn = isLoggedIn();
-
-    document.querySelectorAll(".model-option").forEach(option => {
-        const model = option.dataset.model;
-        const locked = !loggedIn && !GUEST_ALLOWED_MODELS.includes(model);
-        option.classList.toggle("locked", locked);
-        option.title = locked ? "Log in to use this model" : "";
-    });
-}
-
-function closeModelMenu() {
-    modelMenu.classList.add("hidden");
-}
-
-function toggleModelMenu() {
-    if (thinking) return;
-    modelMenu.classList.toggle("hidden");
-}
-
-function selectModel(model) {
-    if (thinking) return;
-    if (!MODELS[model]) return;
-
-    if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(model)) {
-        closeModelMenu();
+function selectModel(id) {
+    if (thinking || !MODELS[id]) return;
+    if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id)) {
+        closePopovers();
         showToast("Log in to use this model");
         openAuthModal("login");
         return;
     }
-
-    selectedModel = model;
-    localStorage.setItem(MODEL_KEY, selectedModel);
+    selectedModel = id;
+    localStorage.setItem(MODEL_KEY, id);
+    closePopovers();
     updateModelUI();
-    closeModelMenu();
-    showToast(`${MODELS[selectedModel].name} selected`);
+    updateComposer();
 }
+
+function isSyntaxOn() { return !!MODELS[selectedModel].syntaxCode && syntaxActive; }
+
+/* ===================================================================
+   Health polling
+   =================================================================== */
+async function pollHealth() {
+    try {
+        const r = await fetch(API_URL + "/health", { cache: "no-store" });
+        if (!r.ok) throw new Error("health " + r.status);
+        modelStatus = (await r.json()).models || {};
+    } catch {
+        const cleared = {};
+        Object.keys(MODELS).forEach(k => { cleared[k] = { running: false }; });
+        modelStatus = cleared;
+    }
+    updateModelUI();
+}
+
+/* ===================================================================
+   Theme / accent / sidebar
+   =================================================================== */
+function applyTheme(t) { document.documentElement.setAttribute("data-theme", t); localStorage.setItem(THEME_KEY, t); }
+function applyAccent(c) {
+    document.documentElement.style.setProperty("--accent", c);
+    // readable text colour on top of the accent
+    const n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    document.documentElement.style.setProperty("--on-accent", (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#08100b" : "#ffffff");
+    localStorage.setItem(ACCENT_KEY, c);
+}
+const isNarrow = () => window.matchMedia("(max-width: 800px)").matches;
+function setDrawer(open) { sidebar.classList.toggle("open", open); scrim.classList.toggle("show", open); }
+function applyCollapsed(c) {
+    sidebar.classList.toggle("collapsed", c);
+    localStorage.setItem(SIDEBAR_KEY, c ? "1" : "0");
+    $("collapseButton").textContent = c ? "⟩" : "⟨";
+}
+
+/* ===================================================================
+   Auth UI + flows
+   =================================================================== */
+function updateAuthUI() {
+    const email = isLoggedIn() ? localStorage.getItem(AUTH_KEY) : null;
+    $("profileAvatar").textContent = email ? email[0] : "?";
+    $("profileName").textContent = email || "Guest";
+    $("profileSub").textContent = email ? "Signed in" : "Not signed in";
+    $("menuLogin").classList.toggle("hidden", !!email);
+    $("menuSignup").classList.toggle("hidden", !!email);
+    $("menuLogout").classList.toggle("hidden", !email);
+    const fixed = sanitizeModel(selectedModel);
+    if (fixed !== selectedModel) { selectedModel = fixed; localStorage.setItem(MODEL_KEY, fixed); }
+    updateModelUI();
+    updateComposer();
+}
+
+function clearAuth() { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(TOKEN_KEY); }
+
+function logout() {
+    const token = getToken();
+    if (token) fetch(API_URL + "/logout", { method: "POST", headers: { Authorization: "Bearer " + token } }).catch(() => {});
+    clearAuth();
+    onAuthChanged();
+    showToast("Logged out");
+}
+
+function expireLogin() { clearAuth(); onAuthChanged(); openAuthModal("login"); }
+
+function openModalShell() { modal.classList.remove("hidden"); }
+function closeModal() { modal.classList.add("hidden"); }
+
+function openAuthModal(mode) {
+    openModalShell();
+    const signup = mode === "signup";
+    modalContent.innerHTML =
+        "<h2>" + (signup ? "Create account" : "Log in") + "</h2>" +
+        "<p>" + (signup ? "Sign up to unlock every Beam model and sync your chats." : "Welcome back.") + "</p>" +
+        '<div class="form-field"><label for="authEmailInput">Email</label><input type="email" id="authEmailInput" autocomplete="email"></div>' +
+        '<div class="form-field"><label for="authPasswordInput">Password</label><input type="password" id="authPasswordInput" autocomplete="' + (signup ? "new-password" : "current-password") + '"></div>' +
+        '<input type="text" id="authWebsiteInput" class="honeypot-field" tabindex="-1" autocomplete="off" aria-hidden="true">' +
+        '<div class="form-error" id="authFormError"></div>' +
+        '<button class="btn block" id="authSubmitBtn">' + (signup ? "Sign up" : "Log in") + "</button>" +
+        '<div class="form-switch">' + (signup ? "Already have an account? " : "Don't have an account? ") +
+        '<a id="authSwitchLink">' + (signup ? "Log in" : "Sign up") + "</a></div>";
+
+    $("authSwitchLink").addEventListener("click", () => openAuthModal(signup ? "login" : "signup"));
+    const submit = async () => {
+        const email = $("authEmailInput").value.trim(), password = $("authPasswordInput").value, website = $("authWebsiteInput").value;
+        const err = $("authFormError"), btn = $("authSubmitBtn");
+        err.classList.remove("visible");
+        if (!email || !password) { err.textContent = "Please fill in both fields."; err.classList.add("visible"); return; }
+        btn.disabled = true; btn.textContent = signup ? "Signing up..." : "Logging in...";
+        try {
+            const r = await fetch(API_URL + "/" + (signup ? "signup" : "login"), {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, website })
+            });
+            let data = {};
+            try { data = await r.json(); } catch {}
+            if (!r.ok) throw new Error(data.detail || "Something went wrong.");
+            localStorage.setItem(AUTH_KEY, data.email);
+            if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+            await onAuthChanged();
+            closeModal();
+            showToast(signup ? "Account created" : "Logged in");
+        } catch (e) {
+            err.textContent = e instanceof TypeError ? "Can't reach the Beam server." : e.message;
+            err.classList.add("visible");
+        } finally { btn.disabled = false; btn.textContent = signup ? "Sign up" : "Log in"; }
+    };
+    $("authSubmitBtn").addEventListener("click", submit);
+    $("authPasswordInput").addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    $("authEmailInput").focus();
+}
+
+/* ===================================================================
+   Settings (Appearance / Memory / Account), Model info, Policy
+   =================================================================== */
+function openSettings(tab) {
+    openModalShell();
+    tab = tab || "appearance";
+    const tabs = [["appearance", "Appearance"], ["memory", "Memory"], ["account", "Account"]];
+    modalContent.innerHTML = "<h2>Settings</h2>" +
+        '<div class="tabs">' + tabs.map(t => '<button class="tab' + (t[0] === tab ? " active" : "") + '" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</div>" +
+        '<div id="settingsBody"></div>';
+    modalContent.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => openSettings(b.dataset.tab)));
+    const body = $("settingsBody");
+
+    if (tab === "appearance") {
+        const theme = document.documentElement.getAttribute("data-theme");
+        const accent = localStorage.getItem(ACCENT_KEY) || ACCENTS[0];
+        body.innerHTML =
+            '<div class="setting"><span class="lbl">Theme</span><div class="seg"><button data-theme-set="dark" class="' + (theme === "dark" ? "active" : "") + '">Dark</button><button data-theme-set="light" class="' + (theme === "light" ? "active" : "") + '">Light</button></div></div>' +
+            '<div class="setting"><span class="lbl">Accent color</span><div class="swatches">' +
+            ACCENTS.map(c => '<button class="swatch' + (c === accent ? " active" : "") + '" data-accent="' + c + '" style="background:' + c + '" aria-label="Accent ' + c + '"></button>').join("") +
+            '<input type="color" id="accentPicker" value="' + accent + '" aria-label="Custom accent"></div></div>';
+        body.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { applyTheme(b.dataset.themeSet); openSettings("appearance"); }));
+        body.querySelectorAll("[data-accent]").forEach(b => b.addEventListener("click", () => { applyAccent(b.dataset.accent); openSettings("appearance"); }));
+        $("accentPicker").addEventListener("input", e => applyAccent(e.target.value));
+    }
+
+    if (tab === "memory") {
+        body.innerHTML = "<p>Custom Memory is what Beam has stored about you on the server.</p>" +
+            '<button class="btn" id="getMemoryBtn">Get my memory</button><div id="memoryOut"></div>';
+        $("getMemoryBtn").addEventListener("click", getMemory);
+    }
+
+    if (tab === "account") {
+        const email = isLoggedIn() ? localStorage.getItem(AUTH_KEY) : null;
+        body.innerHTML = email
+            ? '<div class="kv"><span>Email</span><span></span></div><div class="kv"><span>Status</span><span>Signed in</span></div><div class="setting"><button class="btn ghost" id="settingsLogout">Log out</button></div>'
+            : "<p>You're using Beam as a guest. Only Beam o1 Flash is available without an account.</p>" +
+              '<div class="setting"><button class="btn" id="settingsLogin">Log in</button></div>';
+        if (email) {
+            body.querySelector(".kv span:last-child").textContent = email;
+            $("settingsLogout").addEventListener("click", () => { closeModal(); logout(); });
+        } else $("settingsLogin").addEventListener("click", () => openAuthModal("login"));
+    }
+}
+
+async function getMemory() {
+    const out = $("memoryOut"), btn = $("getMemoryBtn");
+    const show = (text, isErr) => { out.innerHTML = '<div class="memory-box' + (isErr ? " error" : "") + '"></div>'; out.firstChild.textContent = text; };
+    if (!isLoggedIn()) { show("Log in to view your memory.", true); return; }
+    if (!MEMORY_ENDPOINT) {
+        show("Memory retrieval isn't connected yet: the supplied frontend files contain no memory API. Set MEMORY_ENDPOINT in app.js to your server's memory route.", true);
+        return;
+    }
+    btn.disabled = true; btn.textContent = "Loading…";
+    try {
+        const r = await authFetch(MEMORY_ENDPOINT, { cache: "no-store" });
+        if (r.status === 401) { expireLogin(); return; }
+        if (!r.ok) throw new Error("Server error (" + r.status + ")");
+        const raw = await r.text();
+        let text = raw;
+        try {
+            const d = JSON.parse(raw);
+            text = typeof d === "string" ? d : (d.memory || d.content || JSON.stringify(d, null, 2));
+            if (typeof text !== "string") text = JSON.stringify(text, null, 2);
+        } catch {}
+        show(text.trim() || "No memory stored yet.", false);
+    } catch (e) {
+        show("Couldn't load memory: " + e.message, true);
+    } finally { btn.disabled = false; btn.textContent = "Get my memory"; }
+}
+
+function openModelInfo() {
+    openModalShell();
+    const m = MODELS[selectedModel], online = modelStatus ? dotClass(selectedModel) === "online" : null;
+    modalContent.innerHTML = "<h2></h2><p></p><p></p>";
+    const [h, p1, p2] = modalContent.children;
+    h.textContent = m.name;
+    p1.textContent = (online === null ? "Checking status…" : online ? "● Online" : "● Offline") + (m.syntaxCode ? " · Syntax Code supported" : "");
+    p2.textContent = m.desc;
+}
+
+function openPolicy() {
+    openModalShell();
+    modalContent.innerHTML = "<h2>Beam policy</h2>" +
+        "<p>Beam is an experimental AI project. Responses can be incorrect, incomplete, outdated, or misleading.</p>" +
+        "<p>Do not rely on Beam for medical, legal, financial, emergency, or other high-stakes decisions.</p>" +
+        "<p>This public beta runs on a personally hosted Beam server. Availability, performance, session persistence, and response quality may change without notice.</p>" +
+        "<p>Without an account you can talk to Beam o1 Flash only. Log in or sign up to unlock the other models.</p>";
+}
+
+/* ===================================================================
+   Conversations
+   =================================================================== */
+function loadLocalConversations() {
+    try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(s) ? s : []; } catch { return []; }
+}
+function saveConversations() { if (!isLoggedIn()) localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations)); }
 
 function createConversation() {
     const now = Date.now();
-    const conversation = {
-        id: crypto.randomUUID(),
-        remote: false,
-        loaded: true,
-        title: "New conversation",
-        messages: [],
-        createdAt: now,
-        updatedAt: now
-    };
-    conversations.unshift(conversation);
-    activeConversationId = conversation.id;
-    localStorage.setItem(ACTIVE_KEY, activeConversationId);
-    saveConversations();
-    renderConversationList();
-    renderChat();
+    const c = { id: crypto.randomUUID(), remote: false, loaded: true, title: "New conversation", messages: [], createdAt: now, updatedAt: now };
+    conversations.unshift(c);
+    activeConversationId = c.id;
+    localStorage.setItem(ACTIVE_KEY, c.id);
+    saveConversations(); renderConversationList(); renderChat();
 }
+const getActiveConversation = () => conversations.find(c => c.id === activeConversationId) || null;
+function ensureActiveConversation() { if (!getActiveConversation()) createConversation(); return getActiveConversation(); }
 
-function getActiveConversation() {
-    return conversations.find(c => c.id === activeConversationId) || null;
-}
-
-function ensureActiveConversation() {
-    let conversation = getActiveConversation();
-    if (!conversation) {
-        createConversation();
-        conversation = getActiveConversation();
-    }
-    return conversation;
-}
-
-function expireLogin() {
-    localStorage.removeItem(AUTH_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    onAuthChanged();
-    openAuthModal("login");
-}
-
-// Called after login / logout / expiry: swap between this browser's guest chats
-// and the signed-in account's chats from the server.
 async function onAuthChanged() {
     const loggedIn = isLoggedIn();
-    conversations = loggedIn ? [] : loadConversations();
+    conversations = loggedIn ? [] : loadLocalConversations();
     activeConversationId = localStorage.getItem(ACTIVE_KEY);
     if (loggedIn) await syncConversations(true);
     if (!getActiveConversation()) {
-        if (conversations.length) {
-            activeConversationId = conversations[0].id;
-            localStorage.setItem(ACTIVE_KEY, activeConversationId);
-        } else {
-            createConversation();
-        }
+        if (conversations.length) { activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId); }
+        else createConversation();
     }
-    updateAuthUI();
-    renderConversationList();
-    renderChat();
+    updateAuthUI(); renderConversationList(); renderChat();
 }
 
 async function loadConversationMessages(conv) {
     const token = getToken();
     try {
-        const r = await authFetch(`/conversations/${encodeURIComponent(conv.id)}`, { cache: "no-store" });
+        const r = await authFetch("/conversations/" + encodeURIComponent(conv.id), { cache: "no-store" });
         if (r.status === 401) { expireLogin(); return; }
         if (!r.ok || getToken() !== token) return;
         const d = await r.json();
-        conv.messages = (d.messages || []).map(m => ({
-            role: m.role,
-            content: m.content,
-            timestamp: Math.round(m.ts * 1000),
-            model: m.model || undefined
-        }));
+        conv.messages = (d.messages || []).map(m => ({ role: m.role, content: m.role === "user" ? stripSyntaxPrefix(m.content) : m.content, timestamp: Math.round(m.ts * 1000), model: m.model || undefined }));
         conv.loaded = true;
     } catch {}
 }
 
-// Pull this account's conversation list from the server (cross-device sync).
 async function syncConversations(force) {
     if (!isLoggedIn() || syncing || (thinking && !force)) return;
     syncing = true;
@@ -636,804 +471,416 @@ async function syncConversations(force) {
         if (r.status === 401) { expireLogin(); return; }
         if (!r.ok) return;
         const data = await r.json();
-        if (getToken() !== token) return;   // account changed while we were waiting
-
+        if (getToken() !== token) return;
         const before = activeConversationId;
         const old = new Map(conversations.map(c => [c.id, c]));
         const merged = (data.conversations || []).map(sv => {
             const prev = old.get(sv.id);
             const localCount = prev ? prev.messages.filter(m => !m.transient).length : -1;
             const keep = !!(prev && prev.loaded !== false && localCount === sv.count);
-            return {
-                id: sv.id,
-                title: sv.title,
-                createdAt: sv.created * 1000,
-                updatedAt: sv.updated * 1000,
-                messages: keep ? prev.messages : [],
-                loaded: keep,
-                remote: true
-            };
+            return { id: sv.id, title: sv.title, createdAt: sv.created * 1000, updatedAt: sv.updated * 1000, messages: keep ? prev.messages : [], loaded: keep, remote: true };
         });
-        // keep a blank chat that hasn't been sent yet
-        conversations.forEach(c => {
-            if (!c.remote && c.messages.length === 0 && !merged.some(m => m.id === c.id)) merged.push(c);
-        });
+        conversations.forEach(c => { if (!c.remote && c.messages.length === 0 && !merged.some(m => m.id === c.id)) merged.push(c); });
         conversations = merged;
-
         if (!getActiveConversation()) {
-            if (conversations.length) {
-                activeConversationId = conversations[0].id;
-                localStorage.setItem(ACTIVE_KEY, activeConversationId);
-            } else {
-                createConversation();
-                return;
-            }
+            if (conversations.length) { activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId); }
+            else { createConversation(); return; }
         }
-
         let rerender = activeConversationId !== before;
         const active = getActiveConversation();
-        if (active && active.remote && active.loaded === false) {
-            await loadConversationMessages(active);
-            rerender = true;
-        }
+        if (active && active.remote && active.loaded === false) { await loadConversationMessages(active); rerender = true; }
         renderConversationList();
         if (rerender && !thinking) renderChat();
-    } catch {
-    } finally {
-        syncing = false;
-    }
+    } catch {} finally { syncing = false; }
 }
 
-function formatTime(timestamp) {
-    return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(timestamp));
+const fmtTime = ts => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(ts));
+function fmtConvTime(ts) {
+    const d = new Date(ts), n = new Date();
+    const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    if (same(d, n)) return fmtTime(ts);
+    const y = new Date(n); y.setDate(n.getDate() - 1);
+    if (same(d, y)) return "Yesterday";
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(d);
 }
+function deriveTitle(t) { const c = t.replace(/\s+/g, " ").trim(); return !c ? "New conversation" : c.length <= 48 ? c : c.slice(0, 45).trimEnd() + "..."; }
 
-function formatConversationTime(timestamp) {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const sameDay = date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-    if (sameDay) return formatTime(timestamp);
-
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const isYesterday = date.getFullYear() === yesterday.getFullYear() && date.getMonth() === yesterday.getMonth() && date.getDate() === yesterday.getDate();
-    if (isYesterday) return "Yesterday";
-
-    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
-}
-
-function deriveTitle(text) {
-    const cleaned = text.replace(/\s+/g, " ").trim();
-    if (!cleaned) return "New conversation";
-    if (cleaned.length <= 48) return cleaned;
-    return cleaned.slice(0, 45).trimEnd() + "...";
-}
-
-function showToast(message) {
-    const toast = document.createElement("div");
-    toast.className = "toast";
-    toast.textContent = message;
-    toastContainer.appendChild(toast);
-    setTimeout(() => { toast.remove(); }, 2600);
+function showToast(msg) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.textContent = msg;
+    $("toastContainer").appendChild(t);
+    setTimeout(() => t.remove(), 2600);
 }
 
 function renderConversationList() {
-    const query = chatSearch.value.trim().toLowerCase();
-    const filtered = conversations
-        .filter(c => !query || c.title.toLowerCase().includes(query) || c.messages.some(m => m.content.toLowerCase().includes(query)))
+    const q = $("chatSearch").value.trim().toLowerCase();
+    let list = conversations.filter(c => !q || c.title.toLowerCase().includes(q) || c.messages.some(m => m.content.toLowerCase().includes(q)))
         .sort((a, b) => b.updatedAt - a.updatedAt);
-
-    conversationHeading.textContent = currentView === "recents" ? "Recent" : "Today";
-    conversationCount.textContent = filtered.length;
-    conversationList.innerHTML = "";
-    emptyConversations.style.display = filtered.length === 0 ? "flex" : "none";
-
-    for (const conversation of filtered) {
+    if (currentView === "recents") list = list.slice(0, 10);
+    $("conversationCount").textContent = list.length;
+    const el = $("conversationList");
+    el.innerHTML = "";
+    $("emptyConversations").style.display = list.length ? "none" : "block";
+    for (const c of list) {
         const item = document.createElement("div");
-        item.className = "conversation-item";
-        if (conversation.id === activeConversationId) item.classList.add("active");
-
-        const content = document.createElement("div");
-        content.className = "conversation-item-content";
-
-        const title = document.createElement("div");
-        title.className = "conversation-title";
-        title.textContent = conversation.title;
-
-        const time = document.createElement("div");
-        time.className = "conversation-time";
-        time.textContent = formatConversationTime(conversation.updatedAt);
-
-        content.appendChild(title);
-        content.appendChild(time);
-
-        const deleteButton = document.createElement("button");
-        deleteButton.className = "conversation-delete";
-        deleteButton.textContent = "×";
-        deleteButton.title = "Delete conversation";
-        deleteButton.addEventListener("click", event => {
-            event.stopPropagation();
-            deleteConversation(conversation.id);
-        });
-
-        item.appendChild(content);
-        item.appendChild(deleteButton);
-        item.addEventListener("click", () => openConversation(conversation.id));
-        conversationList.appendChild(item);
+        item.className = "conversation-item" + (c.id === activeConversationId ? " active" : "");
+        const main = document.createElement("div"); main.className = "conv-main";
+        const title = document.createElement("div"); title.className = "conv-title"; title.textContent = c.title;
+        const time = document.createElement("div"); time.className = "conv-time"; time.textContent = fmtConvTime(c.updatedAt);
+        main.append(title, time);
+        const del = document.createElement("button");
+        del.className = "conv-delete"; del.textContent = "×"; del.title = "Delete conversation"; del.setAttribute("aria-label", "Delete conversation");
+        del.addEventListener("click", e => { e.stopPropagation(); deleteConversation(c.id); });
+        item.append(main, del);
+        item.addEventListener("click", () => openConversation(c.id));
+        el.appendChild(item);
     }
 }
 
 function deleteConversation(id) {
-    const target = conversations.find(c => c.id === id);
-    if (target && target.remote && isLoggedIn()) {
-        authFetch(`/conversations/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
-    }
+    const t = conversations.find(c => c.id === id);
+    if (t && t.remote && isLoggedIn()) authFetch("/conversations/" + encodeURIComponent(id), { method: "DELETE" }).catch(() => {});
     conversations = conversations.filter(c => c.id !== id);
     saveConversations();
-
     if (activeConversationId === id) {
-        activeConversationId = null;
-        localStorage.removeItem(ACTIVE_KEY);
-        if (conversations.length > 0) {
+        activeConversationId = null; localStorage.removeItem(ACTIVE_KEY);
+        if (conversations.length) {
             conversations.sort((a, b) => b.updatedAt - a.updatedAt);
-            activeConversationId = conversations[0].id;
-            localStorage.setItem(ACTIVE_KEY, activeConversationId);
+            activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId);
         }
     }
     renderConversationList();
-    if (activeConversationId && !thinking) { openConversation(activeConversationId); } else { renderChat(); }
+    if (activeConversationId && !thinking) openConversation(activeConversationId); else renderChat();
     showToast("Conversation deleted");
 }
 
 async function openConversation(id) {
     if (thinking) return;
-    const conversation = conversations.find(c => c.id === id);
-    if (!conversation) return;
-    activeConversationId = id;
-    localStorage.setItem(ACTIVE_KEY, id);
-    sidebar.classList.remove("open");
-    renderConversationList();
-    if (conversation.remote && conversation.loaded === false) {
-        chatArea.innerHTML = '<div class="welcome"><p class="welcome-subtitle">Loading conversation...</p></div>';
-        await loadConversationMessages(conversation);
+    const c = conversations.find(x => x.id === id);
+    if (!c) return;
+    activeConversationId = id; localStorage.setItem(ACTIVE_KEY, id);
+    setDrawer(false); renderConversationList();
+    if (c.remote && c.loaded === false) {
+        chatArea.innerHTML = '<div class="welcome"><p>Loading conversation…</p></div>';
+        await loadConversationMessages(c);
     }
     if (activeConversationId === id) renderChat();
 }
 
-function addMessageElement(role, content, timestamp, model) {
-    const message = document.createElement("div");
-    message.className = `message ${role}`;
-
+/* ===================================================================
+   Rendering messages
+   =================================================================== */
+function addMessageElement(role, content, timestamp, model, isError) {
+    const msg = document.createElement("div");
+    msg.className = "message " + role + (isError ? " error" : "");
     const avatar = document.createElement("div");
-    avatar.className = `avatar ${role === "assistant" ? "beam" : "user"}`;
+    avatar.className = "avatar " + (role === "assistant" ? "beam" : "user");
+    if (role === "assistant") { const img = document.createElement("img"); img.src = "./BeamIcon.png"; img.alt = ""; avatar.appendChild(img); }
+    else avatar.textContent = "You";
 
-    if (role === "assistant") {
-        const img = document.createElement("img");
-        img.src = "./BeamIcon.png";
-        img.alt = "Beam";
-        avatar.appendChild(img);
-    } else {
-        avatar.textContent = "YOU";
-    }
+    const body = document.createElement("div"); body.className = "message-body";
+    const head = document.createElement("div"); head.className = "message-header";
+    const name = document.createElement("span"); name.className = "message-name";
+    name.textContent = role === "assistant" ? ((MODELS[model] && MODELS[model].name) || "Beam") : "You";
+    const time = document.createElement("span"); time.className = "message-time"; time.textContent = fmtTime(timestamp);
+    head.append(name, time);
 
-    const body = document.createElement("div");
-    body.className = "message-body";
+    const text = document.createElement("div"); text.className = "message-content";
+    if (role === "user") text.textContent = content; else text.innerHTML = parseMarkdown(content);
+    body.append(head, text);
 
-    const header = document.createElement("div");
-    header.className = "message-header";
-
-    const name = document.createElement("span");
-    name.className = "message-name";
-    name.textContent = role === "assistant" ? (MODELS[model]?.name || "Beam") : "You";
-
-    const time = document.createElement("span");
-    time.className = "message-time";
-    time.textContent = formatTime(timestamp);
-
-    header.appendChild(name);
-    header.appendChild(time);
-
-    const text = document.createElement("div");
-    text.className = "message-content";
-    text.innerHTML = parseMarkdown(content);
-
-    body.appendChild(header);
-    body.appendChild(text);
-
-    if (role === "assistant") {
-        const actions = document.createElement("div");
-        actions.className = "message-actions";
-
-        const copy = document.createElement("button");
-        copy.className = "copy-message";
-        copy.textContent = "Copy";
+    if (role === "assistant" && !isError) {
+        const actions = document.createElement("div"); actions.className = "message-actions";
+        const copy = document.createElement("button"); copy.className = "copy-message"; copy.textContent = "Copy";
         copy.addEventListener("click", async () => {
-            try {
-                await navigator.clipboard.writeText(text.textContent);
-                copy.textContent = "Copied";
-                setTimeout(() => { copy.textContent = "Copy"; }, 1200);
-            } catch {
-                showToast("Couldn't copy message");
-            }
+            try { await navigator.clipboard.writeText(text.textContent); copy.textContent = "Copied"; setTimeout(() => copy.textContent = "Copy", 1200); }
+            catch { showToast("Couldn't copy message"); }
         });
-
-        actions.appendChild(copy);
-        body.appendChild(actions);
+        actions.appendChild(copy); body.appendChild(actions);
     }
-
-    message.appendChild(avatar);
-    message.appendChild(body);
-    return message;
+    msg.append(avatar, body);
+    return msg;
 }
 
 function renderWelcome() {
-    const welcome = document.createElement("div");
-    welcome.className = "welcome";
-    welcome.innerHTML = `
-        <div class="welcome-hero">
-            <div class="hero-logo">
-                <img src="./BeamIcon.png" alt="Beam">
-            </div>
-            <h1>What can I help with?</h1>
-            <p class="welcome-subtitle">
-                Ask Beam a question, work through an idea, write something, or just start a conversation.
-            </p>
-        </div>
-        <div class="suggestions">
-            <button class="suggestion" data-prompt="Explain something interesting to me.">
-                <span class="suggestion-icon">✦</span>
-                <strong>Explain something</strong>
-                <span>Break down a topic in a simple way.</span>
-            </button>
-            <button class="suggestion" data-prompt="Help me solve a problem.">
-                <span class="suggestion-icon">⌁</span>
-                <strong>Help me solve something</strong>
-                <span>Work through a problem step by step.</span>
-            </button>
-            <button class="suggestion" data-prompt="Give me an interesting idea for a project.">
-                <span class="suggestion-icon">◇</span>
-                <strong>Brainstorm</strong>
-                <span>Come up with something interesting.</span>
-            </button>
-            <button class="suggestion" data-prompt="Tell me a random fun fact.">
-                <span class="suggestion-icon">✺</span>
-                <strong>Tell me a fun fact</strong>
-                <span>Something random and interesting.</span>
-            </button>
-        </div>
-    `;
-    chatArea.appendChild(welcome);
-
-    welcome.querySelectorAll(".suggestion").forEach(button => {
-        button.addEventListener("click", async () => {
-            if (thinking) return;
-            messageInput.value = button.dataset.prompt;
-            updateComposer();
-            await sendMessage();
-        });
-    });
+    const w = document.createElement("div"); w.className = "welcome";
+    w.innerHTML = '<img class="hero-logo" src="./BeamIcon.png" alt=""><h1>What can I help with?</h1>' +
+        "<p>Ask Beam a question, work through an idea, write something, or just start a conversation.</p>" +
+        '<div class="suggestions"></div>';
+    const items = [
+        ["Explain something", "Break down a topic in a simple way.", "Explain something interesting to me."],
+        ["Help me solve something", "Work through a problem step by step.", "Help me solve a problem."],
+        ["Brainstorm", "Come up with something interesting.", "Give me an interesting idea for a project."],
+        ["Tell me a fun fact", "Something random and interesting.", "Tell me a random fun fact."]
+    ];
+    const box = w.querySelector(".suggestions");
+    for (const [t, d, prompt] of items) {
+        const b = document.createElement("button"); b.className = "suggestion";
+        b.innerHTML = "<strong></strong><span></span>";
+        b.querySelector("strong").textContent = t; b.querySelector("span").textContent = d;
+        b.addEventListener("click", () => { if (thinking) return; messageInput.value = prompt; updateComposer(); sendMessage(); });
+        box.appendChild(b);
+    }
+    chatArea.appendChild(w);
 }
 
 function getMessageList() {
-    let list = chatArea.querySelector(".message-list");
-    if (!list) {
-        list = document.createElement("div");
-        list.className = "message-list";
-        chatArea.appendChild(list);
-    }
-    return list;
+    let l = chatArea.querySelector(".message-list");
+    if (!l) { l = document.createElement("div"); l.className = "message-list"; chatArea.appendChild(l); }
+    return l;
 }
 
 function renderChat() {
     chatArea.innerHTML = "";
-    const conversation = getActiveConversation();
-    if (!conversation || conversation.messages.length === 0) {
-        renderWelcome();
-        updateComposer();
-        return;
-    }
-
-    const list = document.createElement("div");
-    list.className = "message-list";
-
-    for (const message of conversation.messages) {
-        list.appendChild(addMessageElement(message.role, message.content, message.timestamp, message.model));
-    }
+    const c = getActiveConversation();
+    if (!c || c.messages.length === 0) { renderWelcome(); updateComposer(); return; }
+    const list = document.createElement("div"); list.className = "message-list";
+    for (const m of c.messages) list.appendChild(addMessageElement(m.role, m.content, m.timestamp, m.model, m.error));
     chatArea.appendChild(list);
-
-    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; updateScrollButton(); });
     updateComposer();
 }
 
 function showThinking(model) {
     removeThinking();
-    const list = getMessageList();
-    const thinkingElement = document.createElement("div");
-    thinkingElement.className = "thinking";
-    thinkingElement.id = "thinkingIndicator";
-    const modelName = MODELS[model]?.name || "Beam";
-
-    thinkingElement.innerHTML =
-        '<div class="avatar beam">' +
-            '<img src="./BeamIcon.png" alt="Beam" class="spinning">' +
-        '</div>' +
-        '<div class="thinking-content">' +
-            '<div class="thinking-header">' +
-                '<span>' + modelName + '</span>' +
-                '<span class="status-text" id="statusText">thinking.</span>' +
-            '</div>' +
-        '</div>';
-
-    list.appendChild(thinkingElement);
-
-    let dots = 0;
-    thinkingDotsInterval = setInterval(function() {
-        dots = (dots + 1) % 3;
-        const statusEl = document.getElementById("statusText");
-        if (statusEl) statusEl.textContent = "thinking" + ".".repeat(dots + 1);
-    }, 450);
-
+    const row = document.createElement("div");
+    row.className = "thinking-row"; row.id = "thinkingIndicator";
+    row.innerHTML = '<div class="avatar beam"><img src="./BeamIcon.png" alt="" class="spinning"></div>' +
+        '<div class="thinking-label"><span class="thinking-text"></span><span class="thinking-dots"><i></i><i></i><i></i></span></div>';
+    row.querySelector(".thinking-text").textContent = ((MODELS[model] && MODELS[model].name) || "Beam") + " is thinking";
+    getMessageList().appendChild(row);
     requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
 }
-
-function setThinkingGenerating() {
-    if (thinkingDotsInterval) {
-        clearInterval(thinkingDotsInterval);
-        thinkingDotsInterval = null;
-    }
-    const statusEl = document.getElementById("statusText");
-    if (statusEl) statusEl.textContent = "generating";
-}
-
-function removeThinking() {
-    if (thinkingDotsInterval) {
-        clearInterval(thinkingDotsInterval);
-        thinkingDotsInterval = null;
-    }
-    const el = document.getElementById("thinkingIndicator");
-    if (el) el.remove();
-}
+function removeThinking() { const el = $("thinkingIndicator"); if (el) el.remove(); }
 
 function updateComposer() {
-    // Guests can chat as long as the currently selected model is one
-    // they're allowed to use (o1-flash). Logged-in users can always chat.
     const canSend = isLoggedIn() || GUEST_ALLOWED_MODELS.includes(selectedModel);
     messageInput.disabled = !canSend;
-    messageInput.placeholder = canSend
-        ? (isLoggedIn() ? "Message Beam..." : "Message O1 Flash (guest mode)...")
-        : "Log in to chat with Beam...";
+    messageInput.placeholder = !canSend ? "Log in to chat with Beam..."
+        : (isLoggedIn() ? (isSyntaxOn() ? "Describe the code you want…" : "Message Beam...") : "Message Beam o1 Flash (guest mode)...");
     sendButton.disabled = !canSend || thinking || messageInput.value.trim().length === 0;
 }
+function resizeInput() { messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 190) + "px"; }
 
-function resizeInput() {
-    messageInput.style.height = "auto";
-    messageInput.style.height = Math.min(messageInput.scrollHeight, 190) + "px";
-}
+const isNearBottom = (th = 120) => chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight <= th;
+function updateScrollButton() { $("scrollBottom").classList.toggle("visible", chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight > 250); }
 
+/* ===================================================================
+   Sending (real streaming: renders each chunk as it arrives)
+   =================================================================== */
 async function sendMessage() {
-    const guestMode = !isLoggedIn();
-
-    // Guests may only ever talk to a guest-allowed model. If somehow the
-    // selection drifted elsewhere, bounce them to login instead of
-    // silently switching models on them.
-    if (guestMode && !GUEST_ALLOWED_MODELS.includes(selectedModel)) {
-        requireLogin();
-        return;
-    }
-
+    const guest = !isLoggedIn();
+    if (guest && !GUEST_ALLOWED_MODELS.includes(selectedModel)) { showToast("Please log in to use this model"); openAuthModal("login"); return; }
     const text = messageInput.value.trim();
     if (!text || thinking) return;
 
-    const conversation = ensureActiveConversation();
-    const modelUsed = selectedModel;
-    const timestamp = Date.now();
-
-    conversation.messages.push({ role: "user", content: text, timestamp });
-
-    if (conversation.title === "New conversation" || conversation.messages.length === 1) {
-        conversation.title = deriveTitle(text);
-    }
-
-    conversation.updatedAt = timestamp;
-    messageInput.value = "";
-    resizeInput();
-    saveConversations();
-    renderConversationList();
-    renderChat();
+    const conv = ensureActiveConversation();
+    const modelUsed = selectedModel, useSyntax = isSyntaxOn(), ts = Date.now();
+    conv.messages.push({ role: "user", content: text, timestamp: ts });
+    if (conv.title === "New conversation" || conv.messages.length === 1) conv.title = deriveTitle(text);
+    conv.updatedAt = ts;
+    messageInput.value = ""; resizeInput();
+    saveConversations(); renderConversationList(); renderChat();
 
     thinking = true;
-    setGeneratingState(true);
-    updateComposer();
-    showThinking(modelUsed);
+    document.body.classList.add("is-generating");
+    updateComposer(); showThinking(modelUsed);
 
-    let assistantMessageElement = null;
-    let assistantTextNode = null;
-    let assistantAvatarImg = null;
-    let fullResponseText = "";
+    let msgEl = null, textNode = null, full = "";
+    const finishError = (message, partial) => {
+        removeThinking(); if (msgEl) msgEl.remove();
+        const last = conv.messages[conv.messages.length - 1];
+        if (last && last.role === "user" && !partial) last.transient = true;
+        if (partial) conv.messages.push({ role: "assistant", content: partial, timestamp: Date.now(), model: modelUsed, transient: true });
+        conv.messages.push({ role: "assistant", content: "Couldn't get a response.\n\n" + message, timestamp: Date.now(), transient: true, error: true });
+    };
 
     try {
-        const response = await fetch(`${API_URL}/chat/stream`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: chatBody(conversation.id, text, modelUsed, guestMode)
+        const response = await fetch(API_URL + "/chat/stream", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: chatBody(conv.id, text, modelUsed, guest, useSyntax)
         });
-
-        if (response.status === 401) {
-            expireLogin();
-            throw new Error("Your login expired. Please log in again.");
-        }
-
-        if (response.status === 403) {
-            let detail = "Log in to use this model.";
-            try {
-                const errorData = await response.json();
-                detail = errorData.detail || detail;
-            } catch {}
-            throw new Error(detail);
-        }
-
+        if (response.status === 401) { expireLogin(); throw new Error("Your login expired. Please log in again."); }
         if (!response.ok) {
             let detail = "";
-            try {
-                const errorData = await response.json();
-                detail = errorData.detail || errorData.message || "";
-            } catch {}
-            throw new Error(detail || `Server error (${response.status})`);
+            try { const d = await response.json(); detail = d.detail || d.message || ""; } catch {}
+            throw new Error(detail || (response.status === 403 ? "Log in to use this model." : "Server error (" + response.status + ")"));
         }
+        if (!response.body) throw new Error("This browser can't read streamed responses.");
 
-        setThinkingGenerating();
-
-        const list = getMessageList();
-        assistantMessageElement = addMessageElement("assistant", "", Date.now(), modelUsed);
-        list.appendChild(assistantMessageElement);
-        assistantTextNode = assistantMessageElement.querySelector(".message-content");
-
-        // Keep the Beam logo spinning on the real message while it streams in
-        assistantAvatarImg = assistantMessageElement.querySelector(".avatar.beam img");
-
-        removeThinking();
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-
+        const reader = response.body.getReader(), decoder = new TextDecoder("utf-8");
+        let streamErr = null;
         while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            const stickToBottom = isNearBottom();
-            fullResponseText += chunk;
-            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
-            if (stickToBottom) {
-                chatArea.scrollTop = chatArea.scrollHeight;
+            let chunk;
+            try { chunk = await reader.read(); } catch (e) { streamErr = e; break; }
+            if (chunk.done) break;
+            const piece = decoder.decode(chunk.value, { stream: true });
+            if (!piece) continue;
+            if (!msgEl) {   // first real data: thinking indicator becomes the answer
+                removeThinking();
+                msgEl = addMessageElement("assistant", "", Date.now(), modelUsed);
+                getMessageList().appendChild(msgEl);
+                textNode = msgEl.querySelector(".message-content");
             }
+            const stick = isNearBottom();
+            full += piece;
+            textNode.innerHTML = parseMarkdown(full);
+            if (stick) chatArea.scrollTop = chatArea.scrollHeight;
             updateScrollButton();
         }
 
-        if (!fullResponseText) {
-            fullResponseText = "Beam returned an empty response.";
-            assistantTextNode.innerHTML = parseMarkdown(fullResponseText);
+        if (streamErr) {
+            finishError("The connection was interrupted" + (full ? " — the reply above is incomplete." : "."), full);
+            renderChat(); showToast("Response interrupted");
+        } else if (!full.trim()) {
+            finishError("Beam returned an empty response.");
+            renderChat();
+        } else {
+            conv.messages.push({ role: "assistant", content: full, timestamp: Date.now(), model: modelUsed });
+            if (!guest) { conv.remote = true; conv.loaded = true; }
         }
-
-        conversation.messages.push({
-            role: "assistant",
-            content: String(fullResponseText),
-            timestamp: Date.now(),
-            model: modelUsed
-        });
-        if (!guestMode) {
-            conversation.remote = true;
-            conversation.loaded = true;
-        }
-        conversation.updatedAt = Date.now();
-        saveConversations();
-        renderConversationList();
-
+        conv.updatedAt = Date.now();
+        saveConversations(); renderConversationList();
     } catch (error) {
-        removeThinking();
-        if (assistantMessageElement) assistantMessageElement.remove();
-        assistantAvatarImg = null;
-
-        const lastMsg = conversation.messages[conversation.messages.length - 1];
-        if (lastMsg && lastMsg.role === "user") lastMsg.transient = true;   // never reached the server
-        conversation.messages.push({
-            role: "assistant",
-            content: "I couldn't reach the Beam server.\n\n" + error.message,
-            timestamp: Date.now(),
-            transient: true
-        });
-        conversation.updatedAt = Date.now();
-        saveConversations();
-        renderConversationList();
-        renderChat();
-        showToast("Beam server connection failed");
-        // Something failed talking to the API — re-check status right away
-        // instead of waiting for the next poll interval.
+        finishError(error instanceof TypeError ? "Can't reach the Beam server." : error.message, full);
+        conv.updatedAt = Date.now();
+        saveConversations(); renderConversationList(); renderChat();
+        showToast("Beam request failed");
         pollHealth();
     } finally {
-        // Stop all spinning logos once generation is finished (or failed)
-        setGeneratingState(false);
+        document.body.classList.remove("is-generating");
         thinking = false;
-        updateComposer();
-        messageInput.focus();
+        updateComposer(); messageInput.focus();
         if (isLoggedIn()) syncConversations();
     }
 }
 
 function newChat() {
     if (thinking) return;
-    const current = getActiveConversation();
-    if (current && !current.remote && current.messages.length === 0) {   // already a blank chat
-        messageInput.focus();
-        return;
-    }
-    createConversation();
-    messageInput.focus();
+    const cur = getActiveConversation();
+    if (cur && !cur.remote && cur.messages.length === 0) { messageInput.focus(); return; }
+    createConversation(); setDrawer(false); messageInput.focus();
 }
 
 function clearCurrentConversation() {
     if (thinking) return;
-    const conversation = getActiveConversation();
-    if (!conversation) return;
-    if (conversation.remote && isLoggedIn()) {
-        authFetch(`/conversations/${encodeURIComponent(conversation.id)}`, { method: "DELETE" }).catch(() => {});
-    }
-    conversation.id = crypto.randomUUID();      // fresh conversation id = fresh server session
-    activeConversationId = conversation.id;
-    localStorage.setItem(ACTIVE_KEY, activeConversationId);
-    conversation.remote = false;
-    conversation.loaded = true;
-    conversation.messages = [];
-    conversation.title = "New conversation";
-    conversation.updatedAt = Date.now();
-    saveConversations();
-    renderConversationList();
-    renderChat();
+    const c = getActiveConversation();
+    if (!c) return;
+    if (c.remote && isLoggedIn()) authFetch("/conversations/" + encodeURIComponent(c.id), { method: "DELETE" }).catch(() => {});
+    c.id = crypto.randomUUID();
+    activeConversationId = c.id; localStorage.setItem(ACTIVE_KEY, c.id);
+    Object.assign(c, { remote: false, loaded: true, messages: [], title: "New conversation", updatedAt: Date.now() });
+    saveConversations(); renderConversationList(); renderChat();
     showToast("Conversation cleared");
 }
 
 function exportConversation() {
-    const conversation = getActiveConversation();
-    if (!conversation || conversation.messages.length === 0) {
-        showToast("Nothing to export");
-        return;
+    const c = getActiveConversation();
+    if (!c || !c.messages.length) { showToast("Nothing to export"); return; }
+    const sep = "----------------------------------------";
+    const lines = ["Beam conversation", "Title: " + c.title, "Date: " + new Date(c.createdAt).toLocaleString(), "", sep, ""];
+    for (const m of c.messages) {
+        const who = m.role === "assistant" ? ((MODELS[m.model] && MODELS[m.model].name) || "Beam") : "You";
+        lines.push(who + " — " + new Date(m.timestamp).toLocaleString(), m.content, "", sep, "");
     }
-
-    const lines = [
-        "Beam conversation",
-        `Title: ${conversation.title}`,
-        `Date: ${new Date(conversation.createdAt).toLocaleString()}`,
-        "",
-        "----------------------------------------",
-        ""
-    ];
-
-    for (const message of conversation.messages) {
-        const speaker = message.role === "assistant" ? (MODELS[message.model]?.name || "Beam") : "You";
-        lines.push(
-            `${speaker} — ${new Date(message.timestamp).toLocaleString()}`,
-            message.content,
-            "",
-            "----------------------------------------",
-            ""
-        );
-    }
-
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${conversation.title.replace(/[\\/:*?"<>|]/g, "_")}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = c.title.replace(/[\\/:*?"<>|]/g, "_") + ".txt";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-function openModal(type) {
-    modal.classList.remove("hidden");
-    if (type === "model") {
-        const model = MODELS[selectedModel];
-        const online = isModelOnline(selectedModel);
-        modalContent.innerHTML = `
-            <div class="modal-content">
-                <h2>${model.name}</h2>
-                <p><span class="modal-status-dot ${online ? "" : "offline"}"></span> ${online ? "Online" : "Offline"}</p>
-                <p>${model.description}</p>
-                <p>The selected model is used for new messages in this conversation. You can switch models any time from the sidebar.</p>
-            </div>
-        `;
-    }
-    if (type === "policy") {
-        modalContent.innerHTML = `
-            <div class="modal-content">
-                <h2>Beam policy</h2>
-                <p>Beam is an experimental AI project. Responses can be incorrect, incomplete, outdated, or misleading.</p>
-                <p>Do not rely on Beam for medical, legal, financial, emergency, or other high-stakes decisions.</p>
-                <p>This public beta is operated through a personally hosted Beam server. Availability, performance, session persistence, and response quality may change without notice.</p>
-                <p>Without an account, you can talk to O1 Flash only. Log in or sign up to unlock the other Beam models.</p>
-            </div>
-        `;
-    }
-    if (type === "theme") {
-        const currentAccent = localStorage.getItem(ACCENT_KEY) || "#42d97b";
-        modalContent.innerHTML = `
-            <div class="modal-content">
-                <h2>Appearance</h2>
-                <p>Choose a theme and accent color.</p>
-                <div style="display:flex;gap:10px;margin-top:14px">
-                    <button id="setLight" style="padding:8px 14px;border-radius:8px;background:#eee;color:#111;cursor:pointer">Light</button>
-                    <button id="setDark" style="padding:8px 14px;border-radius:8px;background:#222;color:#fff;cursor:pointer">Dark</button>
-                </div>
-                <div style="margin-top:14px">
-                    <label style="font-size:12px;color:var(--muted)">Accent color</label><br>
-                    <input type="color" id="accentPicker" value="${currentAccent}" style="margin-top:6px;width:60px;height:34px;cursor:pointer;background:transparent;border:1px solid var(--border-strong);border-radius:6px">
-                </div>
-            </div>
-        `;
-        document.getElementById("setLight").addEventListener("click", () => applyTheme("light"));
-        document.getElementById("setDark").addEventListener("click", () => applyTheme("dark"));
-        document.getElementById("accentPicker").addEventListener("input", e => applyAccent(e.target.value));
-    }
-}
+/* ===================================================================
+   Popovers + events
+   =================================================================== */
+function closePopovers() { modelMenu.classList.add("hidden"); profileMenu.classList.add("hidden"); }
 
-function closeModal() {
-    modal.classList.add("hidden");
-}
-
-// Only auto-scroll during streaming/rendering if the user was already
-// near the bottom — otherwise scrolling up to reread earlier messages
-// gets yanked back down on every incoming chunk.
-function isNearBottom(threshold = 120) {
-    const distance = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight;
-    return distance <= threshold;
-}
-
-function updateScrollButton() {
-    const distance = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight;
-    scrollBottom.classList.toggle("visible", distance > 250);
-}
-
-messageInput.addEventListener("input", () => {
-    resizeInput();
-    updateComposer();
+messageInput.addEventListener("input", () => { resizeInput(); updateComposer(); });
+messageInput.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
 });
-
-messageInput.addEventListener("keydown", event => {
-    if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
-    }
-});
-
 sendButton.addEventListener("click", sendMessage);
-newChatButton.addEventListener("click", newChat);
-clearButton.addEventListener("click", clearCurrentConversation);
-exportButton.addEventListener("click", exportConversation);
-scrollBottom.addEventListener("click", () => {
-    chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: "smooth" });
-});
-
+$("newChatButton").addEventListener("click", newChat);
+$("clearButton").addEventListener("click", clearCurrentConversation);
+$("exportButton").addEventListener("click", exportConversation);
+$("scrollBottom").addEventListener("click", () => chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: "smooth" }));
 chatArea.addEventListener("scroll", updateScrollButton);
-chatSearch.addEventListener("input", renderConversationList);
+$("chatSearch").addEventListener("input", renderConversationList);
 
-// Hamburger button: on narrow/tall screens this just opens the drawer.
-mobileMenu.addEventListener("click", () => { sidebar.classList.toggle("open"); });
+$("mobileMenu").addEventListener("click", () => setDrawer(true));
+scrim.addEventListener("click", () => setDrawer(false));
+$("collapseButton").addEventListener("click", () => { if (isNarrow()) setDrawer(false); else applyCollapsed(!sidebar.classList.contains("collapsed")); });
+window.addEventListener("resize", () => { if (!isNarrow()) setDrawer(false); });
 
-document.getElementById("collapseButton").addEventListener("click", (event) => {
-    event.stopPropagation();
-    toggleSidebarCollapse();
+modelButton.addEventListener("click", e => {
+    e.stopPropagation();
+    if (thinking) return;
+    const open = modelMenu.classList.contains("hidden");
+    closePopovers();
+    if (open) modelMenu.classList.remove("hidden");
+});
+modelMenu.addEventListener("click", e => { const o = e.target.closest(".model-option"); if (o) { e.stopPropagation(); selectModel(o.dataset.model); } });
+
+syntaxToggle.addEventListener("click", () => {
+    if (thinking || !MODELS[selectedModel].syntaxCode) return;
+    syntaxActive = !syntaxActive;
+    localStorage.setItem(SYNTAX_KEY, syntaxActive ? "1" : "0");
+    updateModelUI(); updateComposer();
+    showToast("Syntax Code " + (syntaxActive ? "on" : "off"));
 });
 
-document.getElementById("themeButton").addEventListener("click", () => openModal("theme"));
-document.getElementById("openLoginBtn").addEventListener("click", () => openAuthModal("login"));
-document.getElementById("openSignupBtn").addEventListener("click", () => openAuthModal("signup"));
-document.getElementById("logoutBtn").addEventListener("click", logout);
-
-modelSelector.addEventListener("click", event => {
-    event.stopPropagation();
-    toggleModelMenu();
+$("profileButton").addEventListener("click", e => {
+    e.stopPropagation();
+    const open = profileMenu.classList.contains("hidden");
+    closePopovers();
+    if (open) profileMenu.classList.remove("hidden");
+});
+profileMenu.addEventListener("click", e => {
+    const b = e.target.closest("button[data-action]");
+    if (!b) return;
+    closePopovers(); setDrawer(false);
+    ({ settings: () => openSettings(), modelinfo: openModelInfo, policy: openPolicy,
+       login: () => openAuthModal("login"), signup: () => openAuthModal("signup"), logout })[b.dataset.action]();
 });
 
-mobileModelButton.addEventListener("click", event => {
-    event.stopPropagation();
-    sidebar.classList.toggle("open");
-    modelMenu.classList.remove("hidden");
+document.addEventListener("click", e => {
+    if (!modelMenu.contains(e.target) && !profileMenu.contains(e.target)) closePopovers();
+});
+$("modalClose").addEventListener("click", closeModal);
+$("modalBackdrop").addEventListener("click", closeModal);
+
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeModal(); closePopovers(); setDrawer(false); }
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (e.key.toLowerCase() === "n" && !e.ctrlKey && !e.altKey && !e.metaKey && !["INPUT", "TEXTAREA"].includes(tag)) newChat();
 });
 
-// Delegate model-option clicks so dynamically present buttons (all
-// models, including O1 Flash and BeamSyntax 2) work without needing a
-// static NodeList captured at load time.
-modelMenu.addEventListener("click", event => {
-    const option = event.target.closest(".model-option");
-    if (!option) return;
-    event.stopPropagation();
-    selectModel(option.dataset.model);
-});
-
-document.addEventListener("click", event => {
-    if (!modelMenu.contains(event.target) && event.target !== modelSelector) {
-        closeModelMenu();
-    }
-});
-
-document.querySelectorAll(".nav-button").forEach(button => {
-    button.addEventListener("click", () => {
-        document.querySelectorAll(".nav-button").forEach(item => item.classList.remove("active"));
-        button.classList.add("active");
-        currentView = button.dataset.view;
-        renderConversationList();
-    });
-});
-
-document.getElementById("modelInfoButton").addEventListener("click", () => { openModal("model"); });
-document.getElementById("policyButton").addEventListener("click", () => { openModal("policy"); });
-modalClose.addEventListener("click", closeModal);
-modal.querySelector(".modal-backdrop").addEventListener("click", closeModal);
-
-document.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-        closeModal();
-        closeModelMenu();
-    }
-    if (
-        event.key.toLowerCase() === "n" &&
-        !event.ctrlKey && !event.altKey && !event.metaKey &&
-        document.activeElement !== messageInput &&
-        document.activeElement !== chatSearch &&
-        !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)
-    ) {
-        newChat();
-    }
-});
-
-// If the viewport is resized/rotated across the narrow-layout breakpoint
-// (e.g. a tall tablet flips, or a window is resized), keep the sidebar
-// state sane instead of getting stuck half-collapsed/half-open.
-window.addEventListener("resize", () => {
-    if (!isNarrowLayout()) {
-        sidebar.classList.remove("open");
-    }
-});
-
+/* ===================================================================
+   Init
+   =================================================================== */
 applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+applyAccent(localStorage.getItem(ACCENT_KEY) || ACCENTS[0]);
+applyCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
 
-const savedAccent = localStorage.getItem(ACCENT_KEY);
-if (savedAccent) applyAccent(savedAccent);
+// Obsolete or unknown saved model ids (incl. BeamSyntax 1/2) are dropped here.
+selectedModel = sanitizeModel(selectedModel);
+localStorage.setItem(MODEL_KEY, selectedModel);
 
-// BeamSyntax 1 is discontinued: relabel the old menu entry as BeamSyntax 2.
-document.querySelectorAll('.model-option[data-model="beam-syntax-1"]').forEach(option => {
-    option.dataset.model = "beam-syntax-2";
-    const label = option.querySelector("strong");
-    if (label) label.textContent = "BeamSyntax 2";
-});
-
-applySidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+conversations = isLoggedIn() ? [] : loadLocalConversations();
 updateAuthUI();
-updateModelUI();
-
-if (isLoggedIn()) {
-    onAuthChanged();
-} else if (conversations.length === 0) {
-    createConversation();
-} else {
-    if (!getActiveConversation()) {
-        conversations.sort((a, b) => b.updatedAt - a.updatedAt);
-        activeConversationId = conversations[0].id;
-        localStorage.setItem(ACTIVE_KEY, activeConversationId);
+if (isLoggedIn()) onAuthChanged();
+else {
+    if (!conversations.length) createConversation();
+    else {
+        if (!getActiveConversation()) {
+            conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+            activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId);
+        }
+        renderConversationList(); renderChat();
     }
-    renderConversationList();
-    renderChat();
 }
+updateComposer(); resizeInput();
 
-updateComposer();
-resizeInput();
-
-// Kick off live status polling immediately, then keep it refreshed.
 pollHealth();
 setInterval(pollHealth, HEALTH_POLL_MS);
-
-// Keep signed-in chats in sync with other devices.
 setInterval(() => { if (isLoggedIn() && !thinking) syncConversations(); }, 20000);
-document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && isLoggedIn() && !thinking) syncConversations();
-});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && isLoggedIn() && !thinking) syncConversations(); });
