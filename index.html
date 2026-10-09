@@ -9,7 +9,252 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="./style.css">
+<style>
+/* Beam — design tokens */
+*{box-sizing:border-box}
+:root{
+  --bg:#0b0d12; --surface:#11141b; --surface-2:#171b24; --elev:#1c212b;
+  --border:rgba(255,255,255,.07); --border-strong:rgba(255,255,255,.14);
+  --text:#eef0f4; --muted:#9097a5; --faint:#646b78;
+  --hover:rgba(255,255,255,.055);
+  --accent:#42d97b; --on-accent:#08100b;
+  --green:#42d97b; --red:#ff5c5c;
+  --radius:14px; --sidebar-w:272px;
+  --font:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono","Fira Code",ui-monospace,Menlo,Consolas,monospace;
+}
+[data-theme="light"]{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f0f1f4; --elev:#ffffff;
+  --border:rgba(0,0,0,.08); --border-strong:rgba(0,0,0,.15);
+  --text:#14161a; --muted:#5a606d; --faint:#8a8f99;
+  --hover:rgba(0,0,0,.045); --green:#1fa35a;
+}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+button{border:0;background:none;cursor:pointer}
+.hidden{display:none!important}
+kbd{font-family:inherit;font-size:11px;color:#666;margin-left:auto}
+
+.app{display:flex;width:100%;height:100%}
+
+/* Sidebar */
+.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);height:100%;display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--surface);border-right:1px solid var(--border);transition:width .18s ease,min-width .18s ease,transform .22s ease;z-index:30}
+.sidebar-head{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 4px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-logo{width:30px;height:30px;object-fit:contain;transform-origin:50% 50%}
+.brand-name{font-weight:650;font-size:16px;letter-spacing:-.2px}
+body.is-generating .brand-logo{animation:spin 1.1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.icon-btn{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;color:var(--muted);font-size:15px;transition:.15s}
+.icon-btn:hover{background:var(--hover);color:var(--text)}
+.new-chat{display:flex;align-items:center;gap:10px;height:42px;padding:0 12px;border-radius:12px;background:var(--text);color:var(--bg);font-weight:600;transition:.15s}
+.new-chat:hover{opacity:.9}
+.new-chat kbd{color:inherit;opacity:.5}
+.new-chat-icon{font-size:18px;line-height:1}
+.search{display:flex;align-items:center;gap:8px;height:38px;padding:0 11px;border:1px solid var(--border);border-radius:10px;color:var(--muted)}
+.search:focus-within{border-color:color-mix(in srgb,var(--accent) 50%,var(--border-strong))}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:13px}
+.search input::placeholder{color:var(--faint)}
+.conversation-area{flex:1;min-height:0;overflow-y:auto;margin:0 -4px;padding:0 4px}
+.section-title{display:flex;justify-content:space-between;padding:6px 6px;color:var(--faint);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.conversation-list{display:flex;flex-direction:column;gap:2px}
+.conversation-item{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:10px;color:var(--muted);cursor:pointer;transition:.12s}
+.conversation-item:hover{background:var(--hover);color:var(--text)}
+.conversation-item.active{background:var(--hover);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+.conv-main{min-width:0;flex:1}
+.conv-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}
+.conv-time{margin-top:2px;font-size:10px;color:var(--faint)}
+.conv-delete{display:none;width:24px;height:24px;border-radius:6px;color:var(--muted);align-items:center;justify-content:center}
+.conversation-item:hover .conv-delete{display:flex}
+.conv-delete:hover{color:var(--red);background:rgba(255,80,80,.1)}
+.empty-conversations{padding:30px 10px;text-align:center;color:var(--faint);font-size:12px}
+.sidebar-foot{position:relative;border-top:1px solid var(--border);padding-top:10px}
+.profile-btn{width:100%;display:flex;align-items:center;gap:10px;padding:7px;border-radius:11px;text-align:left;transition:.15s}
+.profile-btn:hover{background:var(--hover)}
+.user-avatar{width:32px;height:32px;min-width:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:13px;text-transform:uppercase}
+.profile-info{display:flex;flex-direction:column;min-width:0}
+.profile-info strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-info span{font-size:11px;color:var(--muted)}
+.sidebar.collapsed{width:68px;min-width:68px}
+.sidebar.collapsed .label,.sidebar.collapsed .label-block,.sidebar.collapsed .brand-name{display:none}
+.sidebar.collapsed .new-chat{justify-content:center;padding:0}
+.sidebar.collapsed .sidebar-head{flex-direction:column;gap:8px}
+.sidebar.collapsed .conversation-area{visibility:hidden}
+
+/* Popovers */
+.popover{position:absolute;z-index:60;background:var(--elev);border:1px solid var(--border-strong);border-radius:12px;padding:5px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.profile-menu{left:0;right:0;bottom:calc(100% + 6px)}
+.sidebar.collapsed .profile-menu{left:100%;right:auto;bottom:0;width:190px;margin-left:8px}
+.profile-menu button{display:block;width:100%;padding:9px 10px;border-radius:8px;text-align:left;font-size:13px}
+.profile-menu button:hover{background:var(--hover)}
+.profile-menu hr{border:0;border-top:1px solid var(--border);margin:4px 0}
+
+/* Main */
+.main{position:relative;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;background:radial-gradient(ellipse at 50% -10%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 55%),var(--bg)}
+.topbar{height:56px;min-height:56px;display:flex;align-items:center;gap:10px;padding:0 18px;border-bottom:1px solid var(--border)}
+.mobile-only{display:none}
+.top-title{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.top-title strong{font-size:14px;font-weight:600}
+.status-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.status-pill.online .status-dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-pill.offline .status-dot{background:var(--red);box-shadow:0 0 6px var(--red)}
+.top-actions{display:flex;gap:2px}
+
+.chat-shell{position:relative;flex:1;min-height:0}
+.chat-area{height:100%;overflow-y:auto;padding:28px 20px 190px;scroll-behavior:smooth}
+.welcome{width:min(760px,100%);margin:9vh auto 0;text-align:center}
+.hero-logo{width:64px;height:64px;object-fit:contain;margin-bottom:16px}
+.welcome h1{margin:0;font-size:clamp(28px,4.5vw,40px);letter-spacing:-1.2px;font-weight:650}
+.welcome p{color:var(--muted);max-width:520px;margin:12px auto 0;line-height:1.6}
+.suggestions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:30px;text-align:left}
+.suggestion{padding:16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:.15s}
+.suggestion:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--border-strong));background:var(--surface-2);transform:translateY(-2px)}
+.suggestion strong{display:block;font-size:13px;margin-bottom:4px}
+.suggestion span{color:var(--muted);font-size:12px;line-height:1.5}
+
+.message-list{width:min(840px,100%);margin:0 auto}
+.message{display:flex;gap:12px;padding:16px 0}
+.avatar{width:30px;height:30px;min-width:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.avatar.user{background:var(--surface-2);color:var(--muted);border:1px solid var(--border)}
+.avatar.beam img{width:30px;height:30px;object-fit:contain}
+.avatar.beam img.spinning{animation:spin 1.1s linear infinite}
+.message-body{flex:1;min-width:0}
+.message-header{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.message-name{font-size:12px;font-weight:650}
+.message-time{font-size:10px;color:var(--faint)}
+.message-content{line-height:1.7;overflow-wrap:anywhere;color:var(--text)}
+.message-content p{margin:0 0 .7em}
+.message-content h1,.message-content h2,.message-content h3{margin:1em 0 .4em;line-height:1.3}
+.message-content h1{font-size:20px}.message-content h2{font-size:17px}.message-content h3{font-size:15px}
+.message-content ul,.message-content ol{margin:.3em 0 .8em;padding-left:22px}
+.message-content li{margin-bottom:4px}
+.message.user .message-content{white-space:pre-wrap}
+.message-content :not(pre)>code{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border:1px solid var(--border);padding:1px 5px;border-radius:5px}
+.message.error .message-content{color:var(--red)}
+.message-actions{margin-top:6px;opacity:0;transition:.15s}
+.message:hover .message-actions{opacity:1}
+.copy-message{padding:3px 8px;border-radius:6px;font-size:11px;color:var(--faint)}
+.copy-message:hover{background:var(--hover);color:var(--text)}
+
+.thinking-row{display:flex;align-items:center;gap:12px;padding:16px 0}
+.thinking-label{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.thinking-dots{display:inline-flex;gap:4px}
+.thinking-dots i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.thinking-dots i:nth-child(2){animation-delay:.15s}
+.thinking-dots i:nth-child(3){animation-delay:.3s}
+@keyframes pulse{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.thinking-text{background:linear-gradient(90deg,var(--muted) 30%,var(--text) 50%,var(--muted) 70%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 2s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.cursor{display:inline-block;width:7px;height:1em;margin-left:2px;vertical-align:text-bottom;background:var(--accent);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+.code-block-container{margin:12px 0;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface-2)}
+.code-block-header{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.code-block-lang{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
+.code-block-copy-btn{padding:3px 8px;border-radius:6px;font-size:11px;color:var(--faint)}
+.code-block-copy-btn:hover{background:var(--hover);color:var(--text)}
+.code-block-copy-btn.copied{color:var(--accent)}
+.code-block-container pre{margin:0;padding:14px;overflow-x:auto}
+.code-block-container code{font-family:var(--mono);font-size:13px;line-height:1.55;background:none;border:0;padding:0}
+
+.scroll-bottom{position:absolute;right:22px;bottom:170px;width:34px;height:34px;display:none;align-items:center;justify-content:center;border:1px solid var(--border-strong);border-radius:50%;background:var(--elev);color:var(--muted)}
+.scroll-bottom.visible{display:flex}
+
+/* Composer */
+.composer-wrap{position:absolute;left:0;right:0;bottom:0;padding:14px 20px 14px;background:linear-gradient(transparent,var(--bg) 28%);z-index:5}
+.composer{width:min(840px,100%);margin:0 auto;padding:12px 12px 10px 16px;border:1px solid var(--border-strong);border-radius:20px;background:var(--surface);box-shadow:0 12px 40px rgba(0,0,0,.25);transition:.15s}
+.composer:focus-within{border-color:color-mix(in srgb,var(--accent) 50%,var(--border-strong));box-shadow:0 12px 40px rgba(0,0,0,.25),0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+#messageInput{display:block;width:100%;max-height:190px;resize:none;border:0;outline:0;background:none;padding:4px 0 8px;line-height:1.55}
+#messageInput::placeholder{color:var(--faint)}
+.composer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.composer-left{display:flex;align-items:center;gap:6px;min-width:0}
+.model-picker{position:relative}
+.chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 11px;border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:550;color:var(--muted);transition:.15s;white-space:nowrap}
+.chip:hover{background:var(--hover);color:var(--text)}
+.chip-dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.chip-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+.chip-dot.offline{background:var(--red)}
+.chip-caret{font-size:10px;opacity:.7}
+.chip.toggle[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 16%,transparent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);color:var(--accent)}
+.chip.toggle span{font-family:var(--mono);font-size:11px}
+.send-button{width:34px;height:34px;min-width:34px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-size:18px;font-weight:700;transition:.15s}
+.send-button:hover:not(:disabled){transform:scale(1.07)}
+.send-button:disabled{opacity:.25;cursor:default}
+.composer-footer{width:min(840px,100%);display:flex;justify-content:space-between;gap:12px;margin:6px auto 0;padding:0 6px;color:var(--faint);font-size:10px}
+
+.model-menu{left:0;bottom:calc(100% + 8px);width:min(340px,86vw);max-height:60vh;overflow-y:auto}
+.model-option{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border-radius:9px;text-align:left}
+.model-option:hover{background:var(--hover)}
+.model-option.locked{opacity:.5}
+.model-option .mo-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.model-option strong{font-size:13px}
+.model-option .mo-desc{font-size:11px;color:var(--muted);line-height:1.4}
+.model-option .mo-check{color:var(--accent);opacity:0}
+.model-option.active .mo-check{opacity:1}
+
+/* Modal / settings */
+.modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px)}
+.modal-card{position:relative;width:min(520px,100%);max-height:86vh;overflow-y:auto;padding:24px;border:1px solid var(--border-strong);border-radius:18px;background:var(--surface);box-shadow:0 30px 100px rgba(0,0,0,.5)}
+.modal-close{position:absolute;top:12px;right:12px;font-size:20px}
+.modal-card h2{margin:0 0 6px;font-size:19px}
+.modal-card p{color:var(--muted);font-size:13px;line-height:1.65;margin:8px 0}
+.tabs{display:flex;gap:4px;margin:14px 0 4px;border-bottom:1px solid var(--border)}
+.tab{padding:8px 12px;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--text);border-color:var(--accent)}
+.setting{margin-top:18px}
+.setting>label,.setting>.lbl{display:block;font-size:12px;font-weight:600;margin-bottom:8px}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:10px;overflow:hidden}
+.seg button{padding:7px 16px;font-size:13px;color:var(--muted)}
+.seg button.active{background:var(--hover);color:var(--text)}
+.swatches{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.swatch{width:28px;height:28px;border-radius:50%;border:2px solid transparent;outline:1px solid var(--border-strong);outline-offset:1px}
+.swatch.active{border-color:var(--bg);outline:2px solid var(--text)}
+input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--border-strong);border-radius:8px;background:none}
+.form-field{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+.form-field label{font-size:12px;color:var(--muted)}
+.form-field input{height:40px;padding:0 12px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface-2);outline:0}
+.form-field input:focus{border-color:var(--accent)}
+.honeypot-field{position:absolute;left:-9999px;opacity:0;height:0;width:0}
+.btn{height:38px;padding:0 16px;border-radius:10px;font-weight:600;font-size:13px;background:var(--accent);color:var(--on-accent)}
+.btn.ghost{background:none;border:1px solid var(--border-strong);color:var(--text)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.block{width:100%;margin-top:16px;height:42px}
+.form-error{margin-top:10px;font-size:12px;color:var(--red);display:none}
+.form-error.visible{display:block}
+.form-switch{margin-top:14px;font-size:12px;color:var(--muted);text-align:center}
+.form-switch a{color:var(--accent);cursor:pointer}
+.memory-box{margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow-y:auto}
+.memory-box.error{color:var(--red)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.kv span:first-child{color:var(--muted)}
+
+.toast-container{position:fixed;right:18px;bottom:18px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--elev);box-shadow:0 12px 35px rgba(0,0,0,.3);font-size:12px;animation:toast .2s ease}
+@keyframes toast{from{opacity:0;transform:translateY(6px)}}
+
+.scrim{display:none}
+
+/* Responsive */
+@media(max-width:800px){
+  .sidebar,.sidebar.collapsed{position:fixed;left:0;top:0;bottom:0;width:284px;min-width:284px;transform:translateX(-105%);box-shadow:20px 0 50px rgba(0,0,0,.3)}
+  .sidebar.collapsed .label,.sidebar.collapsed .label-block,.sidebar.collapsed .brand-name{display:revert}
+  .sidebar.collapsed .conversation-area{visibility:visible}
+  .sidebar.open{transform:none}
+  .scrim.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
+  .mobile-only{display:inline-flex}
+  .topbar{padding:0 10px}
+  .chat-area{padding:20px 14px 180px}
+  .composer-wrap{padding:10px 10px 10px}
+  .suggestions{grid-template-columns:1fr}
+  .hide-mobile{display:none}
+  .message{gap:9px}
+  .model-menu{position:fixed;left:10px;right:10px;bottom:90px;width:auto}
+}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+</style>
 <title>Beam</title>
 </head>
 <body>
@@ -116,6 +361,894 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
-<script src="./app.js"></script>
+<script>
+/* =====================================================================
+   Beam frontend — vanilla JS
+   Backend: Beam Server (FastAPI). Endpoints used (all from the original
+   source): /health, /signup, /login, /logout, /chat/stream,
+   /conversations, /conversations/{id}.
+   ===================================================================== */
+
+const API_URL = "https://earthwarmer2000ultimate.tailfff298.ts.net";
+
+/* ---- Easy-to-edit configuration ----------------------------------- */
+
+// Model list. `syntaxCode: true` means the Syntax Code toggle is shown for
+// that model. When the toggle is on, "/code " is silently prefixed to the
+// message sent to the server (see chatBody).
+const MODELS = {
+    "beam-1":        { name: "Beam 1",        desc: "Daily use, light coding, and talking.",              syntaxCode: false },
+    "beam-1-fol":    { name: "Beam 1 Fol",    desc: "Stronger coding and conversation than Beam 1.",      syntaxCode: false },
+    "beam-syntax-3": { name: "BeamSyntax 3",  desc: "Efficient, specializes in coding.",                  syntaxCode: true  },
+    "beam-coder-1":  { name: "BeamCoder 1",   desc: "A step up from BeamSyntax. Advanced coder.",         syntaxCode: true  },
+    "beam-o2":       { name: "Beam o2",       desc: "Mini model, lighter usage, made for talking.",       syntaxCode: false },
+    "beam-o1-flash": { name: "Beam o1 Flash", desc: "Fast and light. Only model available without login.", syntaxCode: false }
+};
+const DEFAULT_MODEL = "beam-1";
+const GUEST_ALLOWED_MODELS = ["beam-o1-flash"];   // keep in sync with the server
+const GUEST_DEFAULT_MODEL = "beam-o1-flash";
+
+// Memory retrieval endpoint. The original files contain no memory API, so it
+// is unset. Set to e.g. "/memory" once the real path is known; the request is
+// sent as GET with the Bearer token.
+const MEMORY_ENDPOINT = null;
+
+const HEALTH_POLL_MS = 10000;
+const ACCENTS = ["#42d97b", "#4f8cff", "#a87bff", "#ff7a59", "#ffc247", "#ff5fa2"];
+
+/* ---- Storage keys (unchanged so existing data keeps working) ------- */
+const STORAGE_KEY = "beam_conversations_v2";
+const ACTIVE_KEY = "beam_active_conversation_v2";
+const MODEL_KEY = "beam_selected_model_v1";
+const THEME_KEY = "beam_theme_v1";
+const ACCENT_KEY = "beam_accent_v1";
+const SIDEBAR_KEY = "beam_sidebar_collapsed_v1";
+const AUTH_KEY = "beam_auth_email_v1";
+const TOKEN_KEY = "beam_auth_token_v1";
+const SYNTAX_KEY = "beam_syntax_code_v1";
+
+/* ---- DOM ---------------------------------------------------------- */
+const $ = id => document.getElementById(id);
+const chatArea = $("chatArea"), messageInput = $("messageInput"), sendButton = $("sendButton");
+const sidebar = $("sidebar"), scrim = $("scrim"), modal = $("modal"), modalContent = $("modalContent");
+const modelMenu = $("modelMenu"), modelButton = $("modelButton"), syntaxToggle = $("syntaxToggle");
+const profileMenu = $("profileMenu");
+
+/* ---- State -------------------------------------------------------- */
+let modelStatus = null;           // null = not checked yet
+let thinking = false;
+let syncing = false;
+let currentView = "chats";
+let syntaxActive = localStorage.getItem(SYNTAX_KEY) === "1";
+let conversations = [];
+let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
+let selectedModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
+
+/* ===================================================================
+   Markdown (escape first, then format — never inserts raw HTML)
+   =================================================================== */
+function inlineMd(s) {
+    const codes = [];
+    s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return "\u0000" + (codes.length - 1) + "\u0000"; });
+    s = s.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, "$1<em>$2</em>");
+    return s.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + codes[+i] + "</code>");
+}
+
+function parseMarkdown(text) {
+    if (!text) return "";
+    const lines = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").split("\n");
+    const out = [];
+    let inCode = false, code = [], lang = "code", list = null, para = [];
+
+    const flushPara = () => { if (para.length) { out.push("<p>" + inlineMd(para.join("<br>")) + "</p>"); para = []; } };
+    const flushList = () => { if (list) { out.push("</" + list + ">"); list = null; } };
+    const codeHtml = () =>
+        '<div class="code-block-container"><div class="code-block-header"><span class="code-block-lang">' + lang +
+        '</span><button class="code-block-copy-btn" data-copy-code>Copy</button></div><pre><code>' + code.join("\n") + "</code></pre></div>";
+
+    for (const line of lines) {
+        const t = line.trim();
+        if (t.startsWith("```")) {
+            if (!inCode) {
+                flushPara(); flushList();
+                inCode = true; code = [];
+                lang = t.slice(3).trim().replace(/[^a-zA-Z0-9+#._-]/g, "").slice(0, 20) || "code";
+            } else { inCode = false; out.push(codeHtml()); }
+            continue;
+        }
+        if (inCode) { code.push(line); continue; }
+
+        let m;
+        if ((m = t.match(/^(#{1,3})\s+(.*)$/))) {
+            flushPara(); flushList();
+            out.push("<h" + m[1].length + ">" + inlineMd(m[2]) + "</h" + m[1].length + ">");
+        } else if ((m = t.match(/^[-*]\s+(.*)$/))) {
+            flushPara();
+            if (list !== "ul") { flushList(); out.push("<ul>"); list = "ul"; }
+            out.push("<li>" + inlineMd(m[1]) + "</li>");
+        } else if ((m = t.match(/^\d+[.)]\s+(.*)$/))) {
+            flushPara();
+            if (list !== "ol") { flushList(); out.push("<ol>"); list = "ol"; }
+            out.push("<li>" + inlineMd(m[1]) + "</li>");
+        } else if (t === "") {
+            flushPara(); flushList();
+        } else {
+            flushList(); para.push(t);
+        }
+    }
+    flushPara(); flushList();
+    if (inCode) out.push(codeHtml());   // unfinished block while streaming
+    return out.join("");
+}
+
+document.addEventListener("click", e => {
+    const btn = e.target.closest("[data-copy-code]");
+    if (!btn) return;
+    const text = btn.closest(".code-block-container").querySelector("code").textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = "Copied"; btn.classList.add("copied");
+        setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 1800);
+    }).catch(() => { btn.textContent = "Failed"; });
+});
+
+/* ===================================================================
+   Auth helpers
+   =================================================================== */
+const getToken = () => localStorage.getItem(TOKEN_KEY) || null;
+const isLoggedIn = () => !!localStorage.getItem(AUTH_KEY) && !!getToken();
+
+function authFetch(path, options) {
+    const opts = Object.assign({}, options || {});
+    opts.headers = Object.assign({}, opts.headers || {});
+    const token = getToken();
+    if (token) opts.headers["Authorization"] = "Bearer " + token;
+    return fetch(API_URL + path, opts);
+}
+
+// Syntax Code mode: the server's existing /code command does the work, so we
+// prefix the outgoing message with "/code ". The user never sees the prefix.
+const SYNTAX_PREFIX = "/code ";
+function chatBody(sessionId, message, model, guest, syntaxCode) {
+    const outgoing = syntaxCode ? SYNTAX_PREFIX + message : message;
+    return JSON.stringify({ session_id: sessionId, message: outgoing, model, guest, token: getToken() });
+}
+// Server-stored history contains the prefix; hide it when displaying.
+const stripSyntaxPrefix = s => (typeof s === "string" && s.startsWith(SYNTAX_PREFIX)) ? s.slice(SYNTAX_PREFIX.length) : s;
+
+/* ===================================================================
+   Model selection (obsolete ids are never selectable or sent)
+   =================================================================== */
+function sanitizeModel(id) {
+    if (!MODELS[id]) return isLoggedIn() ? DEFAULT_MODEL : GUEST_DEFAULT_MODEL;
+    if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id)) return GUEST_DEFAULT_MODEL;
+    return id;
+}
+
+function renderModelMenu() {
+    modelMenu.innerHTML = "";
+    for (const [id, m] of Object.entries(MODELS)) {
+        const locked = !isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id);
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "model-option" + (id === selectedModel ? " active" : "") + (locked ? " locked" : "");
+        b.dataset.model = id;
+        b.setAttribute("role", "option");
+        b.title = locked ? "Log in to use this model" : "";
+        b.innerHTML = '<span class="chip-dot ' + dotClass(id) + '"></span><span class="mo-main"><strong></strong><span class="mo-desc"></span></span><span class="mo-check">✓</span>';
+        b.querySelector("strong").textContent = m.name;
+        b.querySelector(".mo-desc").textContent = m.desc + (locked ? " (log in)" : "");
+        modelMenu.appendChild(b);
+    }
+}
+
+function dotClass(id) {
+    if (!modelStatus) return "";
+    return modelStatus[id] && modelStatus[id].running ? "online" : "offline";
+}
+
+function updateModelUI() {
+    const m = MODELS[selectedModel];
+    $("modelButtonName").textContent = m.name;
+    $("topModelName").textContent = m.name;
+    $("modelDot").className = "chip-dot " + dotClass(selectedModel);
+
+    // Syntax Code: only for models flagged as supporting it
+    const supported = !!m.syntaxCode;
+    syntaxToggle.classList.toggle("hidden", !supported);
+    const on = supported && syntaxActive;
+    syntaxToggle.setAttribute("aria-pressed", on ? "true" : "false");
+
+    const pill = $("topStatusPill");
+    pill.classList.toggle("online", !!modelStatus && dotClass(selectedModel) === "online");
+    pill.classList.toggle("offline", !!modelStatus && dotClass(selectedModel) === "offline");
+    $("topStatusText").textContent = !modelStatus ? "Checking…" : (dotClass(selectedModel) === "online" ? "Online" : "Offline");
+    renderModelMenu();
+}
+
+function selectModel(id) {
+    if (thinking || !MODELS[id]) return;
+    if (!isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id)) {
+        closePopovers();
+        showToast("Log in to use this model");
+        openAuthModal("login");
+        return;
+    }
+    selectedModel = id;
+    localStorage.setItem(MODEL_KEY, id);
+    closePopovers();
+    updateModelUI();
+    updateComposer();
+}
+
+function isSyntaxOn() { return !!MODELS[selectedModel].syntaxCode && syntaxActive; }
+
+/* ===================================================================
+   Health polling
+   =================================================================== */
+async function pollHealth() {
+    try {
+        const r = await fetch(API_URL + "/health", { cache: "no-store" });
+        if (!r.ok) throw new Error("health " + r.status);
+        modelStatus = (await r.json()).models || {};
+    } catch {
+        const cleared = {};
+        Object.keys(MODELS).forEach(k => { cleared[k] = { running: false }; });
+        modelStatus = cleared;
+    }
+    updateModelUI();
+}
+
+/* ===================================================================
+   Theme / accent / sidebar
+   =================================================================== */
+function applyTheme(t) { document.documentElement.setAttribute("data-theme", t); localStorage.setItem(THEME_KEY, t); }
+function applyAccent(c) {
+    document.documentElement.style.setProperty("--accent", c);
+    // readable text colour on top of the accent
+    const n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    document.documentElement.style.setProperty("--on-accent", (r * 299 + g * 587 + b * 114) / 1000 > 150 ? "#08100b" : "#ffffff");
+    localStorage.setItem(ACCENT_KEY, c);
+}
+const isNarrow = () => window.matchMedia("(max-width: 800px)").matches;
+function setDrawer(open) { sidebar.classList.toggle("open", open); scrim.classList.toggle("show", open); }
+function applyCollapsed(c) {
+    sidebar.classList.toggle("collapsed", c);
+    localStorage.setItem(SIDEBAR_KEY, c ? "1" : "0");
+    $("collapseButton").textContent = c ? "⟩" : "⟨";
+}
+
+/* ===================================================================
+   Auth UI + flows
+   =================================================================== */
+function updateAuthUI() {
+    const email = isLoggedIn() ? localStorage.getItem(AUTH_KEY) : null;
+    $("profileAvatar").textContent = email ? email[0] : "?";
+    $("profileName").textContent = email || "Guest";
+    $("profileSub").textContent = email ? "Signed in" : "Not signed in";
+    $("menuLogin").classList.toggle("hidden", !!email);
+    $("menuSignup").classList.toggle("hidden", !!email);
+    $("menuLogout").classList.toggle("hidden", !email);
+    const fixed = sanitizeModel(selectedModel);
+    if (fixed !== selectedModel) { selectedModel = fixed; localStorage.setItem(MODEL_KEY, fixed); }
+    updateModelUI();
+    updateComposer();
+}
+
+function clearAuth() { localStorage.removeItem(AUTH_KEY); localStorage.removeItem(TOKEN_KEY); }
+
+function logout() {
+    const token = getToken();
+    if (token) fetch(API_URL + "/logout", { method: "POST", headers: { Authorization: "Bearer " + token } }).catch(() => {});
+    clearAuth();
+    onAuthChanged();
+    showToast("Logged out");
+}
+
+function expireLogin() { clearAuth(); onAuthChanged(); openAuthModal("login"); }
+
+function openModalShell() { modal.classList.remove("hidden"); }
+function closeModal() { modal.classList.add("hidden"); }
+
+function openAuthModal(mode) {
+    openModalShell();
+    const signup = mode === "signup";
+    modalContent.innerHTML =
+        "<h2>" + (signup ? "Create account" : "Log in") + "</h2>" +
+        "<p>" + (signup ? "Sign up to unlock every Beam model and sync your chats." : "Welcome back.") + "</p>" +
+        '<div class="form-field"><label for="authEmailInput">Email</label><input type="email" id="authEmailInput" autocomplete="email"></div>' +
+        '<div class="form-field"><label for="authPasswordInput">Password</label><input type="password" id="authPasswordInput" autocomplete="' + (signup ? "new-password" : "current-password") + '"></div>' +
+        '<input type="text" id="authWebsiteInput" class="honeypot-field" tabindex="-1" autocomplete="off" aria-hidden="true">' +
+        '<div class="form-error" id="authFormError"></div>' +
+        '<button class="btn block" id="authSubmitBtn">' + (signup ? "Sign up" : "Log in") + "</button>" +
+        '<div class="form-switch">' + (signup ? "Already have an account? " : "Don't have an account? ") +
+        '<a id="authSwitchLink">' + (signup ? "Log in" : "Sign up") + "</a></div>";
+
+    $("authSwitchLink").addEventListener("click", () => openAuthModal(signup ? "login" : "signup"));
+    const submit = async () => {
+        const email = $("authEmailInput").value.trim(), password = $("authPasswordInput").value, website = $("authWebsiteInput").value;
+        const err = $("authFormError"), btn = $("authSubmitBtn");
+        err.classList.remove("visible");
+        if (!email || !password) { err.textContent = "Please fill in both fields."; err.classList.add("visible"); return; }
+        btn.disabled = true; btn.textContent = signup ? "Signing up..." : "Logging in...";
+        try {
+            const r = await fetch(API_URL + "/" + (signup ? "signup" : "login"), {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, website })
+            });
+            let data = {};
+            try { data = await r.json(); } catch {}
+            if (!r.ok) throw new Error(data.detail || "Something went wrong.");
+            localStorage.setItem(AUTH_KEY, data.email);
+            if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+            await onAuthChanged();
+            closeModal();
+            showToast(signup ? "Account created" : "Logged in");
+        } catch (e) {
+            err.textContent = e instanceof TypeError ? "Can't reach the Beam server." : e.message;
+            err.classList.add("visible");
+        } finally { btn.disabled = false; btn.textContent = signup ? "Sign up" : "Log in"; }
+    };
+    $("authSubmitBtn").addEventListener("click", submit);
+    $("authPasswordInput").addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    $("authEmailInput").focus();
+}
+
+/* ===================================================================
+   Settings (Appearance / Memory / Account), Model info, Policy
+   =================================================================== */
+function openSettings(tab) {
+    openModalShell();
+    tab = tab || "appearance";
+    const tabs = [["appearance", "Appearance"], ["memory", "Memory"], ["account", "Account"]];
+    modalContent.innerHTML = "<h2>Settings</h2>" +
+        '<div class="tabs">' + tabs.map(t => '<button class="tab' + (t[0] === tab ? " active" : "") + '" data-tab="' + t[0] + '">' + t[1] + "</button>").join("") + "</div>" +
+        '<div id="settingsBody"></div>';
+    modalContent.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => openSettings(b.dataset.tab)));
+    const body = $("settingsBody");
+
+    if (tab === "appearance") {
+        const theme = document.documentElement.getAttribute("data-theme");
+        const accent = localStorage.getItem(ACCENT_KEY) || ACCENTS[0];
+        body.innerHTML =
+            '<div class="setting"><span class="lbl">Theme</span><div class="seg"><button data-theme-set="dark" class="' + (theme === "dark" ? "active" : "") + '">Dark</button><button data-theme-set="light" class="' + (theme === "light" ? "active" : "") + '">Light</button></div></div>' +
+            '<div class="setting"><span class="lbl">Accent color</span><div class="swatches">' +
+            ACCENTS.map(c => '<button class="swatch' + (c === accent ? " active" : "") + '" data-accent="' + c + '" style="background:' + c + '" aria-label="Accent ' + c + '"></button>').join("") +
+            '<input type="color" id="accentPicker" value="' + accent + '" aria-label="Custom accent"></div></div>';
+        body.querySelectorAll("[data-theme-set]").forEach(b => b.addEventListener("click", () => { applyTheme(b.dataset.themeSet); openSettings("appearance"); }));
+        body.querySelectorAll("[data-accent]").forEach(b => b.addEventListener("click", () => { applyAccent(b.dataset.accent); openSettings("appearance"); }));
+        $("accentPicker").addEventListener("input", e => applyAccent(e.target.value));
+    }
+
+    if (tab === "memory") {
+        body.innerHTML = "<p>Custom Memory is what Beam has stored about you on the server.</p>" +
+            '<button class="btn" id="getMemoryBtn">Get my memory</button><div id="memoryOut"></div>';
+        $("getMemoryBtn").addEventListener("click", getMemory);
+    }
+
+    if (tab === "account") {
+        const email = isLoggedIn() ? localStorage.getItem(AUTH_KEY) : null;
+        body.innerHTML = email
+            ? '<div class="kv"><span>Email</span><span></span></div><div class="kv"><span>Status</span><span>Signed in</span></div><div class="setting"><button class="btn ghost" id="settingsLogout">Log out</button></div>'
+            : "<p>You're using Beam as a guest. Only Beam o1 Flash is available without an account.</p>" +
+              '<div class="setting"><button class="btn" id="settingsLogin">Log in</button></div>';
+        if (email) {
+            body.querySelector(".kv span:last-child").textContent = email;
+            $("settingsLogout").addEventListener("click", () => { closeModal(); logout(); });
+        } else $("settingsLogin").addEventListener("click", () => openAuthModal("login"));
+    }
+}
+
+async function getMemory() {
+    const out = $("memoryOut"), btn = $("getMemoryBtn");
+    const show = (text, isErr) => { out.innerHTML = '<div class="memory-box' + (isErr ? " error" : "") + '"></div>'; out.firstChild.textContent = text; };
+    if (!isLoggedIn()) { show("Log in to view your memory.", true); return; }
+    if (!MEMORY_ENDPOINT) {
+        show("Memory retrieval isn't connected yet: the supplied frontend files contain no memory API. Set MEMORY_ENDPOINT in app.js to your server's memory route.", true);
+        return;
+    }
+    btn.disabled = true; btn.textContent = "Loading…";
+    try {
+        const r = await authFetch(MEMORY_ENDPOINT, { cache: "no-store" });
+        if (r.status === 401) { expireLogin(); return; }
+        if (!r.ok) throw new Error("Server error (" + r.status + ")");
+        const raw = await r.text();
+        let text = raw;
+        try {
+            const d = JSON.parse(raw);
+            text = typeof d === "string" ? d : (d.memory || d.content || JSON.stringify(d, null, 2));
+            if (typeof text !== "string") text = JSON.stringify(text, null, 2);
+        } catch {}
+        show(text.trim() || "No memory stored yet.", false);
+    } catch (e) {
+        show("Couldn't load memory: " + e.message, true);
+    } finally { btn.disabled = false; btn.textContent = "Get my memory"; }
+}
+
+function openModelInfo() {
+    openModalShell();
+    const m = MODELS[selectedModel], online = modelStatus ? dotClass(selectedModel) === "online" : null;
+    modalContent.innerHTML = "<h2></h2><p></p><p></p>";
+    const [h, p1, p2] = modalContent.children;
+    h.textContent = m.name;
+    p1.textContent = (online === null ? "Checking status…" : online ? "● Online" : "● Offline") + (m.syntaxCode ? " · Syntax Code supported" : "");
+    p2.textContent = m.desc;
+}
+
+function openPolicy() {
+    openModalShell();
+    modalContent.innerHTML = "<h2>Beam policy</h2>" +
+        "<p>Beam is an experimental AI project. Responses can be incorrect, incomplete, outdated, or misleading.</p>" +
+        "<p>Do not rely on Beam for medical, legal, financial, emergency, or other high-stakes decisions.</p>" +
+        "<p>This public beta runs on a personally hosted Beam server. Availability, performance, session persistence, and response quality may change without notice.</p>" +
+        "<p>Without an account you can talk to Beam o1 Flash only. Log in or sign up to unlock the other models.</p>";
+}
+
+/* ===================================================================
+   Conversations
+   =================================================================== */
+function loadLocalConversations() {
+    try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(s) ? s : []; } catch { return []; }
+}
+function saveConversations() { if (!isLoggedIn()) localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations)); }
+
+function createConversation() {
+    const now = Date.now();
+    const c = { id: crypto.randomUUID(), remote: false, loaded: true, title: "New conversation", messages: [], createdAt: now, updatedAt: now };
+    conversations.unshift(c);
+    activeConversationId = c.id;
+    localStorage.setItem(ACTIVE_KEY, c.id);
+    saveConversations(); renderConversationList(); renderChat();
+}
+const getActiveConversation = () => conversations.find(c => c.id === activeConversationId) || null;
+function ensureActiveConversation() { if (!getActiveConversation()) createConversation(); return getActiveConversation(); }
+
+async function onAuthChanged() {
+    const loggedIn = isLoggedIn();
+    conversations = loggedIn ? [] : loadLocalConversations();
+    activeConversationId = localStorage.getItem(ACTIVE_KEY);
+    if (loggedIn) await syncConversations(true);
+    if (!getActiveConversation()) {
+        if (conversations.length) { activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId); }
+        else createConversation();
+    }
+    updateAuthUI(); renderConversationList(); renderChat();
+}
+
+async function loadConversationMessages(conv) {
+    const token = getToken();
+    try {
+        const r = await authFetch("/conversations/" + encodeURIComponent(conv.id), { cache: "no-store" });
+        if (r.status === 401) { expireLogin(); return; }
+        if (!r.ok || getToken() !== token) return;
+        const d = await r.json();
+        conv.messages = (d.messages || []).map(m => ({ role: m.role, content: m.role === "user" ? stripSyntaxPrefix(m.content) : m.content, timestamp: Math.round(m.ts * 1000), model: m.model || undefined }));
+        conv.loaded = true;
+    } catch {}
+}
+
+async function syncConversations(force) {
+    if (!isLoggedIn() || syncing || (thinking && !force)) return;
+    syncing = true;
+    const token = getToken();
+    try {
+        const r = await authFetch("/conversations", { cache: "no-store" });
+        if (r.status === 401) { expireLogin(); return; }
+        if (!r.ok) return;
+        const data = await r.json();
+        if (getToken() !== token) return;
+        const before = activeConversationId;
+        const old = new Map(conversations.map(c => [c.id, c]));
+        const merged = (data.conversations || []).map(sv => {
+            const prev = old.get(sv.id);
+            const localCount = prev ? prev.messages.filter(m => !m.transient).length : -1;
+            const keep = !!(prev && prev.loaded !== false && localCount === sv.count);
+            return { id: sv.id, title: sv.title, createdAt: sv.created * 1000, updatedAt: sv.updated * 1000, messages: keep ? prev.messages : [], loaded: keep, remote: true };
+        });
+        conversations.forEach(c => { if (!c.remote && c.messages.length === 0 && !merged.some(m => m.id === c.id)) merged.push(c); });
+        conversations = merged;
+        if (!getActiveConversation()) {
+            if (conversations.length) { activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId); }
+            else { createConversation(); return; }
+        }
+        let rerender = activeConversationId !== before;
+        const active = getActiveConversation();
+        if (active && active.remote && active.loaded === false) { await loadConversationMessages(active); rerender = true; }
+        renderConversationList();
+        if (rerender && !thinking) renderChat();
+    } catch {} finally { syncing = false; }
+}
+
+const fmtTime = ts => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(ts));
+function fmtConvTime(ts) {
+    const d = new Date(ts), n = new Date();
+    const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    if (same(d, n)) return fmtTime(ts);
+    const y = new Date(n); y.setDate(n.getDate() - 1);
+    if (same(d, y)) return "Yesterday";
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(d);
+}
+function deriveTitle(t) { const c = t.replace(/\s+/g, " ").trim(); return !c ? "New conversation" : c.length <= 48 ? c : c.slice(0, 45).trimEnd() + "..."; }
+
+function showToast(msg) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.textContent = msg;
+    $("toastContainer").appendChild(t);
+    setTimeout(() => t.remove(), 2600);
+}
+
+function renderConversationList() {
+    const q = $("chatSearch").value.trim().toLowerCase();
+    let list = conversations.filter(c => !q || c.title.toLowerCase().includes(q) || c.messages.some(m => m.content.toLowerCase().includes(q)))
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+    if (currentView === "recents") list = list.slice(0, 10);
+    $("conversationCount").textContent = list.length;
+    const el = $("conversationList");
+    el.innerHTML = "";
+    $("emptyConversations").style.display = list.length ? "none" : "block";
+    for (const c of list) {
+        const item = document.createElement("div");
+        item.className = "conversation-item" + (c.id === activeConversationId ? " active" : "");
+        const main = document.createElement("div"); main.className = "conv-main";
+        const title = document.createElement("div"); title.className = "conv-title"; title.textContent = c.title;
+        const time = document.createElement("div"); time.className = "conv-time"; time.textContent = fmtConvTime(c.updatedAt);
+        main.append(title, time);
+        const del = document.createElement("button");
+        del.className = "conv-delete"; del.textContent = "×"; del.title = "Delete conversation"; del.setAttribute("aria-label", "Delete conversation");
+        del.addEventListener("click", e => { e.stopPropagation(); deleteConversation(c.id); });
+        item.append(main, del);
+        item.addEventListener("click", () => openConversation(c.id));
+        el.appendChild(item);
+    }
+}
+
+function deleteConversation(id) {
+    const t = conversations.find(c => c.id === id);
+    if (t && t.remote && isLoggedIn()) authFetch("/conversations/" + encodeURIComponent(id), { method: "DELETE" }).catch(() => {});
+    conversations = conversations.filter(c => c.id !== id);
+    saveConversations();
+    if (activeConversationId === id) {
+        activeConversationId = null; localStorage.removeItem(ACTIVE_KEY);
+        if (conversations.length) {
+            conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+            activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId);
+        }
+    }
+    renderConversationList();
+    if (activeConversationId && !thinking) openConversation(activeConversationId); else renderChat();
+    showToast("Conversation deleted");
+}
+
+async function openConversation(id) {
+    if (thinking) return;
+    const c = conversations.find(x => x.id === id);
+    if (!c) return;
+    activeConversationId = id; localStorage.setItem(ACTIVE_KEY, id);
+    setDrawer(false); renderConversationList();
+    if (c.remote && c.loaded === false) {
+        chatArea.innerHTML = '<div class="welcome"><p>Loading conversation…</p></div>';
+        await loadConversationMessages(c);
+    }
+    if (activeConversationId === id) renderChat();
+}
+
+/* ===================================================================
+   Rendering messages
+   =================================================================== */
+function addMessageElement(role, content, timestamp, model, isError) {
+    const msg = document.createElement("div");
+    msg.className = "message " + role + (isError ? " error" : "");
+    const avatar = document.createElement("div");
+    avatar.className = "avatar " + (role === "assistant" ? "beam" : "user");
+    if (role === "assistant") { const img = document.createElement("img"); img.src = "./BeamIcon.png"; img.alt = ""; avatar.appendChild(img); }
+    else avatar.textContent = "You";
+
+    const body = document.createElement("div"); body.className = "message-body";
+    const head = document.createElement("div"); head.className = "message-header";
+    const name = document.createElement("span"); name.className = "message-name";
+    name.textContent = role === "assistant" ? ((MODELS[model] && MODELS[model].name) || "Beam") : "You";
+    const time = document.createElement("span"); time.className = "message-time"; time.textContent = fmtTime(timestamp);
+    head.append(name, time);
+
+    const text = document.createElement("div"); text.className = "message-content";
+    if (role === "user") text.textContent = content; else text.innerHTML = parseMarkdown(content);
+    body.append(head, text);
+
+    if (role === "assistant" && !isError) {
+        const actions = document.createElement("div"); actions.className = "message-actions";
+        const copy = document.createElement("button"); copy.className = "copy-message"; copy.textContent = "Copy";
+        copy.addEventListener("click", async () => {
+            try { await navigator.clipboard.writeText(text.textContent); copy.textContent = "Copied"; setTimeout(() => copy.textContent = "Copy", 1200); }
+            catch { showToast("Couldn't copy message"); }
+        });
+        actions.appendChild(copy); body.appendChild(actions);
+    }
+    msg.append(avatar, body);
+    return msg;
+}
+
+function renderWelcome() {
+    const w = document.createElement("div"); w.className = "welcome";
+    w.innerHTML = '<img class="hero-logo" src="./BeamIcon.png" alt=""><h1>What can I help with?</h1>' +
+        "<p>Ask Beam a question, work through an idea, write something, or just start a conversation.</p>" +
+        '<div class="suggestions"></div>';
+    const items = [
+        ["Explain something", "Break down a topic in a simple way.", "Explain something interesting to me."],
+        ["Help me solve something", "Work through a problem step by step.", "Help me solve a problem."],
+        ["Brainstorm", "Come up with something interesting.", "Give me an interesting idea for a project."],
+        ["Tell me a fun fact", "Something random and interesting.", "Tell me a random fun fact."]
+    ];
+    const box = w.querySelector(".suggestions");
+    for (const [t, d, prompt] of items) {
+        const b = document.createElement("button"); b.className = "suggestion";
+        b.innerHTML = "<strong></strong><span></span>";
+        b.querySelector("strong").textContent = t; b.querySelector("span").textContent = d;
+        b.addEventListener("click", () => { if (thinking) return; messageInput.value = prompt; updateComposer(); sendMessage(); });
+        box.appendChild(b);
+    }
+    chatArea.appendChild(w);
+}
+
+function getMessageList() {
+    let l = chatArea.querySelector(".message-list");
+    if (!l) { l = document.createElement("div"); l.className = "message-list"; chatArea.appendChild(l); }
+    return l;
+}
+
+function renderChat() {
+    chatArea.innerHTML = "";
+    const c = getActiveConversation();
+    if (!c || c.messages.length === 0) { renderWelcome(); updateComposer(); return; }
+    const list = document.createElement("div"); list.className = "message-list";
+    for (const m of c.messages) list.appendChild(addMessageElement(m.role, m.content, m.timestamp, m.model, m.error));
+    chatArea.appendChild(list);
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; updateScrollButton(); });
+    updateComposer();
+}
+
+function showThinking(model) {
+    removeThinking();
+    const row = document.createElement("div");
+    row.className = "thinking-row"; row.id = "thinkingIndicator";
+    row.innerHTML = '<div class="avatar beam"><img src="./BeamIcon.png" alt="" class="spinning"></div>' +
+        '<div class="thinking-label"><span class="thinking-text"></span><span class="thinking-dots"><i></i><i></i><i></i></span></div>';
+    row.querySelector(".thinking-text").textContent = ((MODELS[model] && MODELS[model].name) || "Beam") + " is thinking";
+    getMessageList().appendChild(row);
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
+}
+function removeThinking() { const el = $("thinkingIndicator"); if (el) el.remove(); }
+
+function updateComposer() {
+    const canSend = isLoggedIn() || GUEST_ALLOWED_MODELS.includes(selectedModel);
+    messageInput.disabled = !canSend;
+    messageInput.placeholder = !canSend ? "Log in to chat with Beam..."
+        : (isLoggedIn() ? (isSyntaxOn() ? "Describe the code you want…" : "Message Beam...") : "Message Beam o1 Flash (guest mode)...");
+    sendButton.disabled = !canSend || thinking || messageInput.value.trim().length === 0;
+}
+function resizeInput() { messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 190) + "px"; }
+
+const isNearBottom = (th = 120) => chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight <= th;
+function updateScrollButton() { $("scrollBottom").classList.toggle("visible", chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight > 250); }
+
+/* ===================================================================
+   Sending (real streaming: renders each chunk as it arrives)
+   =================================================================== */
+async function sendMessage() {
+    const guest = !isLoggedIn();
+    if (guest && !GUEST_ALLOWED_MODELS.includes(selectedModel)) { showToast("Please log in to use this model"); openAuthModal("login"); return; }
+    const text = messageInput.value.trim();
+    if (!text || thinking) return;
+
+    const conv = ensureActiveConversation();
+    const modelUsed = selectedModel, useSyntax = isSyntaxOn(), ts = Date.now();
+    conv.messages.push({ role: "user", content: text, timestamp: ts });
+    if (conv.title === "New conversation" || conv.messages.length === 1) conv.title = deriveTitle(text);
+    conv.updatedAt = ts;
+    messageInput.value = ""; resizeInput();
+    saveConversations(); renderConversationList(); renderChat();
+
+    thinking = true;
+    document.body.classList.add("is-generating");
+    updateComposer(); showThinking(modelUsed);
+
+    let msgEl = null, textNode = null, full = "";
+    const finishError = (message, partial) => {
+        removeThinking(); if (msgEl) msgEl.remove();
+        const last = conv.messages[conv.messages.length - 1];
+        if (last && last.role === "user" && !partial) last.transient = true;
+        if (partial) conv.messages.push({ role: "assistant", content: partial, timestamp: Date.now(), model: modelUsed, transient: true });
+        conv.messages.push({ role: "assistant", content: "Couldn't get a response.\n\n" + message, timestamp: Date.now(), transient: true, error: true });
+    };
+
+    try {
+        const response = await fetch(API_URL + "/chat/stream", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: chatBody(conv.id, text, modelUsed, guest, useSyntax)
+        });
+        if (response.status === 401) { expireLogin(); throw new Error("Your login expired. Please log in again."); }
+        if (!response.ok) {
+            let detail = "";
+            try { const d = await response.json(); detail = d.detail || d.message || ""; } catch {}
+            throw new Error(detail || (response.status === 403 ? "Log in to use this model." : "Server error (" + response.status + ")"));
+        }
+        if (!response.body) throw new Error("This browser can't read streamed responses.");
+
+        const reader = response.body.getReader(), decoder = new TextDecoder("utf-8");
+        let streamErr = null;
+        while (true) {
+            let chunk;
+            try { chunk = await reader.read(); } catch (e) { streamErr = e; break; }
+            if (chunk.done) break;
+            const piece = decoder.decode(chunk.value, { stream: true });
+            if (!piece) continue;
+            if (!msgEl) {   // first real data: thinking indicator becomes the answer
+                removeThinking();
+                msgEl = addMessageElement("assistant", "", Date.now(), modelUsed);
+                getMessageList().appendChild(msgEl);
+                textNode = msgEl.querySelector(".message-content");
+            }
+            const stick = isNearBottom();
+            full += piece;
+            textNode.innerHTML = parseMarkdown(full);
+            if (stick) chatArea.scrollTop = chatArea.scrollHeight;
+            updateScrollButton();
+        }
+
+        if (streamErr) {
+            finishError("The connection was interrupted" + (full ? " — the reply above is incomplete." : "."), full);
+            renderChat(); showToast("Response interrupted");
+        } else if (!full.trim()) {
+            finishError("Beam returned an empty response.");
+            renderChat();
+        } else {
+            conv.messages.push({ role: "assistant", content: full, timestamp: Date.now(), model: modelUsed });
+            if (!guest) { conv.remote = true; conv.loaded = true; }
+        }
+        conv.updatedAt = Date.now();
+        saveConversations(); renderConversationList();
+    } catch (error) {
+        finishError(error instanceof TypeError ? "Can't reach the Beam server." : error.message, full);
+        conv.updatedAt = Date.now();
+        saveConversations(); renderConversationList(); renderChat();
+        showToast("Beam request failed");
+        pollHealth();
+    } finally {
+        document.body.classList.remove("is-generating");
+        thinking = false;
+        updateComposer(); messageInput.focus();
+        if (isLoggedIn()) syncConversations();
+    }
+}
+
+function newChat() {
+    if (thinking) return;
+    const cur = getActiveConversation();
+    if (cur && !cur.remote && cur.messages.length === 0) { messageInput.focus(); return; }
+    createConversation(); setDrawer(false); messageInput.focus();
+}
+
+function clearCurrentConversation() {
+    if (thinking) return;
+    const c = getActiveConversation();
+    if (!c) return;
+    if (c.remote && isLoggedIn()) authFetch("/conversations/" + encodeURIComponent(c.id), { method: "DELETE" }).catch(() => {});
+    c.id = crypto.randomUUID();
+    activeConversationId = c.id; localStorage.setItem(ACTIVE_KEY, c.id);
+    Object.assign(c, { remote: false, loaded: true, messages: [], title: "New conversation", updatedAt: Date.now() });
+    saveConversations(); renderConversationList(); renderChat();
+    showToast("Conversation cleared");
+}
+
+function exportConversation() {
+    const c = getActiveConversation();
+    if (!c || !c.messages.length) { showToast("Nothing to export"); return; }
+    const sep = "----------------------------------------";
+    const lines = ["Beam conversation", "Title: " + c.title, "Date: " + new Date(c.createdAt).toLocaleString(), "", sep, ""];
+    for (const m of c.messages) {
+        const who = m.role === "assistant" ? ((MODELS[m.model] && MODELS[m.model].name) || "Beam") : "You";
+        lines.push(who + " — " + new Date(m.timestamp).toLocaleString(), m.content, "", sep, "");
+    }
+    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = c.title.replace(/[\\/:*?"<>|]/g, "_") + ".txt";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+/* ===================================================================
+   Popovers + events
+   =================================================================== */
+function closePopovers() { modelMenu.classList.add("hidden"); profileMenu.classList.add("hidden"); }
+
+messageInput.addEventListener("input", () => { resizeInput(); updateComposer(); });
+messageInput.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
+});
+sendButton.addEventListener("click", sendMessage);
+$("newChatButton").addEventListener("click", newChat);
+$("clearButton").addEventListener("click", clearCurrentConversation);
+$("exportButton").addEventListener("click", exportConversation);
+$("scrollBottom").addEventListener("click", () => chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: "smooth" }));
+chatArea.addEventListener("scroll", updateScrollButton);
+$("chatSearch").addEventListener("input", renderConversationList);
+
+$("mobileMenu").addEventListener("click", () => setDrawer(true));
+scrim.addEventListener("click", () => setDrawer(false));
+$("collapseButton").addEventListener("click", () => { if (isNarrow()) setDrawer(false); else applyCollapsed(!sidebar.classList.contains("collapsed")); });
+window.addEventListener("resize", () => { if (!isNarrow()) setDrawer(false); });
+
+modelButton.addEventListener("click", e => {
+    e.stopPropagation();
+    if (thinking) return;
+    const open = modelMenu.classList.contains("hidden");
+    closePopovers();
+    if (open) modelMenu.classList.remove("hidden");
+});
+modelMenu.addEventListener("click", e => { const o = e.target.closest(".model-option"); if (o) { e.stopPropagation(); selectModel(o.dataset.model); } });
+
+syntaxToggle.addEventListener("click", () => {
+    if (thinking || !MODELS[selectedModel].syntaxCode) return;
+    syntaxActive = !syntaxActive;
+    localStorage.setItem(SYNTAX_KEY, syntaxActive ? "1" : "0");
+    updateModelUI(); updateComposer();
+    showToast("Syntax Code " + (syntaxActive ? "on" : "off"));
+});
+
+$("profileButton").addEventListener("click", e => {
+    e.stopPropagation();
+    const open = profileMenu.classList.contains("hidden");
+    closePopovers();
+    if (open) profileMenu.classList.remove("hidden");
+});
+profileMenu.addEventListener("click", e => {
+    const b = e.target.closest("button[data-action]");
+    if (!b) return;
+    closePopovers(); setDrawer(false);
+    ({ settings: () => openSettings(), modelinfo: openModelInfo, policy: openPolicy,
+       login: () => openAuthModal("login"), signup: () => openAuthModal("signup"), logout })[b.dataset.action]();
+});
+
+document.addEventListener("click", e => {
+    if (!modelMenu.contains(e.target) && !profileMenu.contains(e.target)) closePopovers();
+});
+$("modalClose").addEventListener("click", closeModal);
+$("modalBackdrop").addEventListener("click", closeModal);
+
+document.addEventListener("keydown", e => {
+    if (e.key === "Escape") { closeModal(); closePopovers(); setDrawer(false); }
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (e.key.toLowerCase() === "n" && !e.ctrlKey && !e.altKey && !e.metaKey && !["INPUT", "TEXTAREA"].includes(tag)) newChat();
+});
+
+/* ===================================================================
+   Init
+   =================================================================== */
+applyTheme(localStorage.getItem(THEME_KEY) || "dark");
+applyAccent(localStorage.getItem(ACCENT_KEY) || ACCENTS[0]);
+applyCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+
+// Obsolete or unknown saved model ids (incl. BeamSyntax 1/2) are dropped here.
+selectedModel = sanitizeModel(selectedModel);
+localStorage.setItem(MODEL_KEY, selectedModel);
+
+conversations = isLoggedIn() ? [] : loadLocalConversations();
+updateAuthUI();
+if (isLoggedIn()) onAuthChanged();
+else {
+    if (!conversations.length) createConversation();
+    else {
+        if (!getActiveConversation()) {
+            conversations.sort((a, b) => b.updatedAt - a.updatedAt);
+            activeConversationId = conversations[0].id; localStorage.setItem(ACTIVE_KEY, activeConversationId);
+        }
+        renderConversationList(); renderChat();
+    }
+}
+updateComposer(); resizeInput();
+
+pollHealth();
+setInterval(pollHealth, HEALTH_POLL_MS);
+setInterval(() => { if (isLoggedIn() && !thinking) syncConversations(); }, 20000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && isLoggedIn() && !thinking) syncConversations(); });
+
+</script>
 </body>
 </html>
