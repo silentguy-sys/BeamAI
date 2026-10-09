@@ -254,6 +254,92 @@ input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--border
 }
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
+/* ===== Animations ===== */
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 18px color-mix(in srgb,var(--accent) 55%,transparent))}}
+
+.message.enter,.thinking-row{animation:rise .38s cubic-bezier(.2,.7,.2,1) both}
+.message-list.fade{animation:fadein .28s ease}
+.popover{animation:pop .16s ease;transform-origin:bottom left}
+.profile-menu{transform-origin:bottom center}
+.modal:not(.hidden) .modal-backdrop{animation:fadein .2s ease}
+.modal:not(.hidden) .modal-card{animation:pop .24s cubic-bezier(.2,.7,.2,1)}
+.toast{animation:rise .25s ease both;transition:opacity .25s ease,transform .25s ease}
+.toast.leaving{opacity:0;transform:translateY(6px)}
+.scroll-bottom.visible{animation:pop .2s ease}
+.conversation-item{transition:background .15s,color .15s,transform .15s}
+.conversation-item:hover{transform:translateX(2px)}
+.send-button:active:not(:disabled),.new-chat:active,.suggestion:active,.chip:active{transform:scale(.96)}
+.chip-caret{transition:transform .2s ease}
+.chip[aria-expanded="true"] .chip-caret{transform:rotate(180deg)}
+.model-option{transition:background .12s,transform .12s}
+.model-option:active{transform:scale(.99)}
+.tab{transition:color .15s,border-color .15s}
+.swatch{transition:transform .15s}
+.swatch:hover{transform:scale(1.12)}
+
+/* Welcome screen */
+.welcome>*{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+.welcome>.hero-logo{animation:rise .55s cubic-bezier(.2,.7,.2,1) both,floaty 5s ease-in-out .6s infinite,glow 5s ease-in-out .6s infinite}
+.welcome>h1{animation-delay:.08s}
+.welcome>p{animation-delay:.16s}
+.welcome .suggestion{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+.welcome .suggestion:nth-child(1){animation-delay:.24s}
+.welcome .suggestion:nth-child(2){animation-delay:.31s}
+.welcome .suggestion:nth-child(3){animation-delay:.38s}
+.welcome .suggestion:nth-child(4){animation-delay:.45s}
+.welcome h1{min-height:1.25em}
+.rot{display:inline-block;transition:opacity .45s ease,transform .45s ease,filter .45s ease}
+.rot.out{opacity:0;transform:translateY(-12px);filter:blur(6px)}
+.rot.pre{opacity:0;transform:translateY(12px);filter:blur(6px)}
+
+/* ===== Model categories (hover flyout) ===== */
+.model-menu{width:230px;max-height:none;overflow:visible}
+.model-cat{position:relative}
+.cat-row{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border-radius:9px;text-align:left;transition:background .15s}
+.cat-row:hover,.model-cat:hover>.cat-row,.model-cat.open>.cat-row{background:var(--hover)}
+.cat-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.cat-main strong{font-size:13px}
+.cat-desc{font-size:11px;color:var(--muted)}
+.cat-arrow{color:var(--faint);font-size:16px;transition:transform .2s ease,color .2s}
+.model-cat.has-active>.cat-row .cat-main strong{color:var(--accent)}
+.cat-sub{position:absolute;left:100%;top:-6px;margin-left:6px;width:min(300px,70vw);padding:5px;background:var(--elev);border:1px solid var(--border-strong);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.35);opacity:0;visibility:hidden;transform:translateX(-8px) scale(.98);transform-origin:left center;transition:opacity .18s ease,transform .22s cubic-bezier(.2,.7,.2,1),visibility 0s linear .22s}
+.cat-sub::before{content:"";position:absolute;left:-10px;top:0;bottom:0;width:10px}
+.cat-sub .model-option{opacity:0;transform:translateX(-6px);transition:opacity .2s ease,transform .22s ease,background .12s}
+@media(hover:hover) and (min-width:801px){
+  .model-cat:hover>.cat-sub{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+  .model-cat:hover>.cat-sub .model-option{opacity:1;transform:none}
+  .model-cat:hover>.cat-sub .model-option:nth-child(2){transition-delay:.05s}
+  .model-cat:hover>.cat-row .cat-arrow{transform:translateX(3px);color:var(--text)}
+}
+.model-cat.open>.cat-sub{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.model-cat.open>.cat-sub .model-option{opacity:1;transform:none}
+.model-cat.open>.cat-row .cat-arrow{color:var(--text)}
+@media(max-width:800px),(hover:none){
+  .model-menu{overflow-y:auto;max-height:60vh;width:auto}
+  .cat-sub{position:static;width:auto;margin:0;padding:0 0 0 8px;background:none;border:0;box-shadow:none;max-height:0;overflow:hidden;opacity:1;visibility:visible;transform:none;transition:max-height .28s ease}
+  .cat-sub::before{display:none}
+  .cat-sub .model-option{opacity:1;transform:none}
+  .model-cat.open>.cat-sub{max-height:320px}
+  .model-cat.open>.cat-row .cat-arrow{transform:rotate(90deg)}
+}
+
+/* ===== More motion ===== */
+.conversation-item.enter{animation:rise .3s cubic-bezier(.2,.7,.2,1) both}
+#settingsBody{animation:fadein .25s ease}
+.status-pill.online .status-dot{animation:dotpulse 2.4s ease-in-out infinite}
+@keyframes dotpulse{0%,100%{box-shadow:0 0 4px var(--green)}50%{box-shadow:0 0 10px var(--green)}}
+.send-button{transition:transform .15s,opacity .2s,background .2s}
+.message-actions,.copy-message,.code-block-copy-btn{transition:opacity .2s,color .15s,background .15s}
+.user-avatar{transition:transform .2s ease}
+.profile-btn:hover .user-avatar{transform:scale(1.06)}
+.icon-btn:active{transform:scale(.9)}
+.top-title strong{animation:fadein .3s ease}
+body.theme-anim,body.theme-anim *{transition:background-color .35s ease,color .35s ease,border-color .35s ease!important}
+
 </style>
 <title>Beam</title>
 </head>
@@ -525,20 +611,44 @@ function sanitizeModel(id) {
     return id;
 }
 
+const MODEL_CATEGORIES = [
+    { name: "Beam Mini",  desc: "Light and fast, made for talking", ids: ["beam-o2", "beam-o1-flash"] },
+    { name: "Beam Main",  desc: "Everyday use and conversation",    ids: ["beam-1", "beam-1-fol"] },
+    { name: "Beam Coder", desc: "Specialized for code",             ids: ["beam-syntax-3", "beam-coder-1"] }
+];
+
 function renderModelMenu() {
     modelMenu.innerHTML = "";
-    for (const [id, m] of Object.entries(MODELS)) {
-        const locked = !isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id);
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "model-option" + (id === selectedModel ? " active" : "") + (locked ? " locked" : "");
-        b.dataset.model = id;
-        b.setAttribute("role", "option");
-        b.title = locked ? "Log in to use this model" : "";
-        b.innerHTML = '<span class="chip-dot ' + dotClass(id) + '"></span><span class="mo-main"><strong></strong><span class="mo-desc"></span></span><span class="mo-check">✓</span>';
-        b.querySelector("strong").textContent = m.name;
-        b.querySelector(".mo-desc").textContent = m.desc + (locked ? " (log in)" : "");
-        modelMenu.appendChild(b);
+    for (const cat of MODEL_CATEGORIES) {
+        const ids = cat.ids.filter(id => MODELS[id]);
+        if (!ids.length) continue;
+        const wrap = document.createElement("div");
+        wrap.className = "model-cat" + (ids.includes(selectedModel) ? " has-active" : "");
+
+        const row = document.createElement("button");
+        row.type = "button"; row.className = "cat-row";
+        row.innerHTML = '<span class="cat-main"><strong></strong><span class="cat-desc"></span></span><span class="cat-arrow">›</span>';
+        row.querySelector("strong").textContent = cat.name;
+        row.querySelector(".cat-desc").textContent = cat.desc;
+        wrap.appendChild(row);
+
+        const sub = document.createElement("div");
+        sub.className = "cat-sub";
+        for (const id of ids) {
+            const m = MODELS[id];
+            const locked = !isLoggedIn() && !GUEST_ALLOWED_MODELS.includes(id);
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "model-option" + (id === selectedModel ? " active" : "") + (locked ? " locked" : "");
+            b.dataset.model = id;
+            b.title = locked ? "Log in to use this model" : "";
+            b.innerHTML = '<span class="chip-dot ' + dotClass(id) + '"></span><span class="mo-main"><strong></strong><span class="mo-desc"></span></span><span class="mo-check">✓</span>';
+            b.querySelector("strong").textContent = m.name;
+            b.querySelector(".mo-desc").textContent = m.desc + (locked ? " (log in)" : "");
+            sub.appendChild(b);
+        }
+        wrap.appendChild(sub);
+        modelMenu.appendChild(wrap);
     }
 }
 
@@ -602,7 +712,12 @@ async function pollHealth() {
 /* ===================================================================
    Theme / accent / sidebar
    =================================================================== */
-function applyTheme(t) { document.documentElement.setAttribute("data-theme", t); localStorage.setItem(THEME_KEY, t); }
+let themeReady = false;
+function applyTheme(t) {
+    if (themeReady) { document.body.classList.add("theme-anim"); setTimeout(() => document.body.classList.remove("theme-anim"), 450); }
+    document.documentElement.setAttribute("data-theme", t); localStorage.setItem(THEME_KEY, t);
+    themeReady = true;
+}
 function applyAccent(c) {
     document.documentElement.style.setProperty("--accent", c);
     // readable text colour on top of the accent
@@ -873,9 +988,10 @@ function showToast(msg) {
     const t = document.createElement("div");
     t.className = "toast"; t.textContent = msg;
     $("toastContainer").appendChild(t);
-    setTimeout(() => t.remove(), 2600);
+    setTimeout(() => { t.classList.add("leaving"); setTimeout(() => t.remove(), 260); }, 2400);
 }
 
+const seenConvIds = new Set();
 function renderConversationList() {
     const q = $("chatSearch").value.trim().toLowerCase();
     let list = conversations.filter(c => !q || c.title.toLowerCase().includes(q) || c.messages.some(m => m.content.toLowerCase().includes(q)))
@@ -887,7 +1003,8 @@ function renderConversationList() {
     $("emptyConversations").style.display = list.length ? "none" : "block";
     for (const c of list) {
         const item = document.createElement("div");
-        item.className = "conversation-item" + (c.id === activeConversationId ? " active" : "");
+        item.className = "conversation-item" + (c.id === activeConversationId ? " active" : "") + (seenConvIds.has(c.id) ? "" : " enter");
+        seenConvIds.add(c.id);
         const main = document.createElement("div"); main.className = "conv-main";
         const title = document.createElement("div"); title.className = "conv-title"; title.textContent = c.title;
         const time = document.createElement("div"); time.className = "conv-time"; time.textContent = fmtConvTime(c.updatedAt);
@@ -934,9 +1051,9 @@ async function openConversation(id) {
 /* ===================================================================
    Rendering messages
    =================================================================== */
-function addMessageElement(role, content, timestamp, model, isError) {
+function addMessageElement(role, content, timestamp, model, isError, animate) {
     const msg = document.createElement("div");
-    msg.className = "message " + role + (isError ? " error" : "");
+    msg.className = "message " + role + (isError ? " error" : "") + (animate ? " enter" : "");
     const avatar = document.createElement("div");
     avatar.className = "avatar " + (role === "assistant" ? "beam" : "user");
     if (role === "assistant") { const img = document.createElement("img"); img.src = "./BeamIcon.png"; img.alt = ""; avatar.appendChild(img); }
@@ -968,7 +1085,7 @@ function addMessageElement(role, content, timestamp, model, isError) {
 
 function renderWelcome() {
     const w = document.createElement("div"); w.className = "welcome";
-    w.innerHTML = '<img class="hero-logo" src="./BeamIcon.png" alt=""><h1>What can I help with?</h1>' +
+    w.innerHTML = '<img class="hero-logo" src="./BeamIcon.png" alt=""><h1><span class="rot" id="welcomeText"></span></h1>' +
         "<p>Ask Beam a question, work through an idea, write something, or just start a conversation.</p>" +
         '<div class="suggestions"></div>';
     const items = [
@@ -986,20 +1103,59 @@ function renderWelcome() {
         box.appendChild(b);
     }
     chatArea.appendChild(w);
+    startWelcomeRotation();
 }
 
+const WELCOME_LINES = [
+    "What can I help with?",
+    "Ready when you are.",
+    "What's on your mind?",
+    "Let's build something.",
+    "Ask me anything.",
+    "Got an idea? Let's hear it."
+];
+let welcomeTimer = null;
+function stopWelcomeRotation() { if (welcomeTimer) { clearInterval(welcomeTimer); welcomeTimer = null; } }
+function startWelcomeRotation() {
+    stopWelcomeRotation();
+    const el = $("welcomeText");
+    if (!el) return;
+    let i = 0;
+    el.textContent = WELCOME_LINES[0];
+    welcomeTimer = setInterval(() => {
+        if (!document.body.contains(el)) { stopWelcomeRotation(); return; }
+        if (document.hidden) return;
+        el.classList.add("out");
+        setTimeout(() => {
+            if (!document.body.contains(el)) return;
+            i = (i + 1) % WELCOME_LINES.length;
+            el.textContent = WELCOME_LINES[i];
+            el.style.transition = "none";
+            el.classList.remove("out");
+            el.classList.add("pre");
+            void el.offsetWidth;            // force reflow so the entrance animates
+            el.style.transition = "";
+            el.classList.remove("pre");
+        }, 450);
+    }, 4200);
+}
 function getMessageList() {
     let l = chatArea.querySelector(".message-list");
     if (!l) { l = document.createElement("div"); l.className = "message-list"; chatArea.appendChild(l); }
     return l;
 }
 
+let renderedConvId = null, renderedCount = 0;
 function renderChat() {
+    stopWelcomeRotation();
     chatArea.innerHTML = "";
     const c = getActiveConversation();
-    if (!c || c.messages.length === 0) { renderWelcome(); updateComposer(); return; }
-    const list = document.createElement("div"); list.className = "message-list";
-    for (const m of c.messages) list.appendChild(addMessageElement(m.role, m.content, m.timestamp, m.model, m.error));
+    if (!c || c.messages.length === 0) { renderedConvId = c ? c.id : null; renderedCount = 0; renderWelcome(); updateComposer(); return; }
+    const sameConv = c.id === renderedConvId;
+    const animFrom = sameConv ? renderedCount : Infinity;   // only newly added messages animate
+    renderedConvId = c.id; renderedCount = c.messages.length;
+    const list = document.createElement("div"); list.className = "message-list" + (sameConv ? "" : " fade");
+    c.messages.forEach((m, idx) => list.appendChild(addMessageElement(m.role, m.content, m.timestamp, m.model, m.error, idx >= animFrom)));
     chatArea.appendChild(list);
     requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; updateScrollButton(); });
     updateComposer();
@@ -1082,7 +1238,7 @@ async function sendMessage() {
             if (!piece) continue;
             if (!msgEl) {   // first real data: thinking indicator becomes the answer
                 removeThinking();
-                msgEl = addMessageElement("assistant", "", Date.now(), modelUsed);
+                msgEl = addMessageElement("assistant", "", Date.now(), modelUsed, false, true);
                 getMessageList().appendChild(msgEl);
                 textNode = msgEl.querySelector(".message-content");
             }
@@ -1101,6 +1257,7 @@ async function sendMessage() {
             renderChat();
         } else {
             conv.messages.push({ role: "assistant", content: full, timestamp: Date.now(), model: modelUsed });
+            renderedCount = conv.messages.length;
             if (!guest) { conv.remote = true; conv.loaded = true; }
         }
         conv.updatedAt = Date.now();
@@ -1156,7 +1313,7 @@ function exportConversation() {
 /* ===================================================================
    Popovers + events
    =================================================================== */
-function closePopovers() { modelMenu.classList.add("hidden"); profileMenu.classList.add("hidden"); }
+function closePopovers() { modelMenu.classList.add("hidden"); profileMenu.classList.add("hidden"); modelButton.setAttribute("aria-expanded", "false"); }
 
 messageInput.addEventListener("input", () => { resizeInput(); updateComposer(); });
 messageInput.addEventListener("keydown", e => {
@@ -1180,9 +1337,19 @@ modelButton.addEventListener("click", e => {
     if (thinking) return;
     const open = modelMenu.classList.contains("hidden");
     closePopovers();
-    if (open) modelMenu.classList.remove("hidden");
+    if (open) { modelMenu.classList.remove("hidden"); modelButton.setAttribute("aria-expanded", "true"); }
 });
-modelMenu.addEventListener("click", e => { const o = e.target.closest(".model-option"); if (o) { e.stopPropagation(); selectModel(o.dataset.model); } });
+modelMenu.addEventListener("click", e => {
+    const o = e.target.closest(".model-option");
+    if (o) { e.stopPropagation(); selectModel(o.dataset.model); return; }
+    const row = e.target.closest(".cat-row");
+    if (row) {
+        e.stopPropagation();
+        const cat = row.parentElement, wasOpen = cat.classList.contains("open");
+        modelMenu.querySelectorAll(".model-cat.open").forEach(c => c.classList.remove("open"));
+        if (!wasOpen) cat.classList.add("open");
+    }
+});
 
 syntaxToggle.addEventListener("click", () => {
     if (thinking || !MODELS[selectedModel].syntaxCode) return;
