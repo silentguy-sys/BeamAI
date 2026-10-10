@@ -234,6 +234,14 @@ input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--border
 .toast{padding:10px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--elev);box-shadow:0 12px 35px rgba(0,0,0,.3);font-size:12px;animation:toast .2s ease}
 @keyframes toast{from{opacity:0;transform:translateY(6px)}}
 
+.attach-strip{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 8px}
+.attach-thumb{position:relative;width:56px;height:56px;border-radius:10px;overflow:hidden;border:1px solid var(--border-strong);animation:pop .18s ease}
+.attach-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.attach-remove{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:12px;line-height:18px;text-align:center}
+.chip.attach{width:32px;padding:0;justify-content:center;font-size:16px}
+.msg-images{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+.msg-images img{max-width:220px;max-height:180px;border-radius:12px;border:1px solid var(--border);object-fit:cover}
+.composer.drop{border-color:var(--accent)}
 .scrim{display:none}
 
 /* Responsive */
@@ -411,6 +419,7 @@ body.theme-anim,body.theme-anim *{transition:background-color .35s ease,color .3
 
     <footer class="composer-wrap">
       <div class="composer">
+        <div class="attach-strip hidden" id="attachStrip"></div>
         <textarea id="messageInput" rows="1" placeholder="Message Beam..." aria-label="Message"></textarea>
         <div class="composer-toolbar">
           <div class="composer-left">
@@ -422,6 +431,8 @@ body.theme-anim,body.theme-anim *{transition:background-color .35s ease,color .3
               </button>
               <div class="popover model-menu hidden" id="modelMenu" role="listbox"></div>
             </div>
+            <button class="chip attach hidden" id="attachButton" type="button" title="Attach image" aria-label="Attach image">＋</button>
+            <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="hidden">
             <button class="chip toggle hidden" id="syntaxToggle" type="button" aria-pressed="false" title="Syntax Code mode">
               <span>{ }</span> Syntax Code
             </button>
@@ -465,7 +476,7 @@ const API_URL = "https://earthwarmer2000ultimate.tailfff298.ts.net";
 const MODELS = {
     "beam-1":        { name: "Beam 1",        desc: "Daily use, light coding, and talking.",              syntaxCode: false },
     "beam-1-fol":    { name: "Beam 1 Fol",    desc: "Stronger coding and conversation than Beam 1.",      syntaxCode: false },
-    "beam-syntax-3": { name: "BeamSyntax 3",  desc: "Efficient, specializes in coding.",                  syntaxCode: true  },
+    "beam-syntax-3": { name: "BeamSyntax 3",  desc: "Efficient, specializes in coding. Can read images.",  syntaxCode: true, vision: true },
     "beam-coder-1":  { name: "BeamCoder 1",   desc: "A step up from BeamSyntax. Advanced coder.",         syntaxCode: true  },
     "beam-o2":       { name: "Beam o2",       desc: "Mini model, lighter usage, made for talking.",       syntaxCode: false },
     "beam-o1-flash": { name: "Beam o1 Flash", desc: "Fast and light. Only model available without login.", syntaxCode: false }
@@ -479,6 +490,8 @@ const GUEST_DEFAULT_MODEL = "beam-o1-flash";
 // sent as GET with the Bearer token.
 const MEMORY_ENDPOINT = null;
 
+const MAX_IMAGES = 4;            // keep in sync with the server
+const IMAGE_MAX_SIDE = 1280;     // images are shrunk in the browser before upload
 const HEALTH_POLL_MS = 10000;
 const ACCENTS = ["#42d97b", "#4f8cff", "#a87bff", "#ff7a59", "#ffc247", "#ff5fa2"];
 
@@ -506,6 +519,7 @@ let thinking = false;
 let syncing = false;
 let currentView = "chats";
 let syntaxActive = localStorage.getItem(SYNTAX_KEY) === "1";
+let pendingImages = [];          // data URLs waiting to be sent
 let conversations = [];
 let activeConversationId = localStorage.getItem(ACTIVE_KEY) || null;
 let selectedModel = localStorage.getItem(MODEL_KEY) || DEFAULT_MODEL;
@@ -595,9 +609,9 @@ function authFetch(path, options) {
 // Syntax Code mode: the server's existing /code command does the work, so we
 // prefix the outgoing message with "/code ". The user never sees the prefix.
 const SYNTAX_PREFIX = "/code ";
-function chatBody(sessionId, message, model, guest, syntaxCode) {
+function chatBody(sessionId, message, model, guest, syntaxCode, images) {
     const outgoing = syntaxCode ? SYNTAX_PREFIX + message : message;
-    return JSON.stringify({ session_id: sessionId, message: outgoing, model, guest, token: getToken() });
+    return JSON.stringify({ session_id: sessionId, message: outgoing, model, guest, token: getToken(), images: images || [] });
 }
 // Server-stored history contains the prefix; hide it when displaying.
 const stripSyntaxPrefix = s => (typeof s === "string" && s.startsWith(SYNTAX_PREFIX)) ? s.slice(SYNTAX_PREFIX.length) : s;
@@ -669,6 +683,10 @@ function updateModelUI() {
     const on = supported && syntaxActive;
     syntaxToggle.setAttribute("aria-pressed", on ? "true" : "false");
 
+    const canImg = supportsImages(selectedModel);
+    $("attachButton").classList.toggle("hidden", !canImg);
+    if (!canImg && pendingImages.length) { pendingImages = []; renderAttachments(); }
+
     const pill = $("topStatusPill");
     pill.classList.toggle("online", !!modelStatus && dotClass(selectedModel) === "online");
     pill.classList.toggle("offline", !!modelStatus && dotClass(selectedModel) === "offline");
@@ -692,6 +710,56 @@ function selectModel(id) {
 }
 
 function isSyntaxOn() { return !!MODELS[selectedModel].syntaxCode && syntaxActive; }
+
+/* ===================================================================
+   Image attachments
+   =================================================================== */
+function supportsImages(id) {
+    const m = MODELS[id];
+    if (!m || !m.vision || !isLoggedIn()) return false;
+    return !(modelStatus && modelStatus[id] && modelStatus[id].vision === false);
+}
+
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file), img = new Image();
+        img.onload = () => {
+            const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(img.width, img.height));
+            const c = document.createElement("canvas");
+            c.width = Math.max(1, Math.round(img.width * scale)); c.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = c.getContext("2d");
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);   // flatten transparency
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            URL.revokeObjectURL(url);
+            resolve(c.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+        img.src = url;
+    });
+}
+
+async function addImageFiles(files) {
+    if (!supportsImages(selectedModel)) { showToast("This model can't read images"); return; }
+    for (const f of files) {
+        if (!f.type.startsWith("image/")) continue;
+        if (pendingImages.length >= MAX_IMAGES) { showToast("Up to " + MAX_IMAGES + " images per message"); break; }
+        try { pendingImages.push(await fileToDataUrl(f)); } catch { showToast("Couldn't read that image"); }
+    }
+    renderAttachments(); updateComposer();
+}
+
+function renderAttachments() {
+    const strip = $("attachStrip");
+    strip.innerHTML = "";
+    strip.classList.toggle("hidden", pendingImages.length === 0);
+    pendingImages.forEach((url, i) => {
+        const t = document.createElement("div"); t.className = "attach-thumb";
+        const img = document.createElement("img"); img.src = url; img.alt = "Attached image";
+        const x = document.createElement("button"); x.type = "button"; x.className = "attach-remove"; x.textContent = "×"; x.setAttribute("aria-label", "Remove image");
+        x.addEventListener("click", () => { pendingImages.splice(i, 1); renderAttachments(); updateComposer(); });
+        t.append(img, x); strip.appendChild(t);
+    });
+}
 
 /* ===================================================================
    Health polling
@@ -904,7 +972,12 @@ function openPolicy() {
 function loadLocalConversations() {
     try { const s = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Array.isArray(s) ? s : []; } catch { return []; }
 }
-function saveConversations() { if (!isLoggedIn()) localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations)); }
+function saveConversations() {
+    if (isLoggedIn()) return;
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations, (k, v) => k === "images" ? undefined : v));
+    } catch {}
+}
 
 function createConversation() {
     const now = Date.now();
@@ -1051,7 +1124,7 @@ async function openConversation(id) {
 /* ===================================================================
    Rendering messages
    =================================================================== */
-function addMessageElement(role, content, timestamp, model, isError, animate) {
+function addMessageElement(role, content, timestamp, model, isError, animate, images) {
     const msg = document.createElement("div");
     msg.className = "message " + role + (isError ? " error" : "") + (animate ? " enter" : "");
     const avatar = document.createElement("div");
@@ -1068,7 +1141,13 @@ function addMessageElement(role, content, timestamp, model, isError, animate) {
 
     const text = document.createElement("div"); text.className = "message-content";
     if (role === "user") text.textContent = content; else text.innerHTML = parseMarkdown(content);
-    body.append(head, text);
+    body.append(head);
+    if (images && images.length) {
+        const box = document.createElement("div"); box.className = "msg-images";
+        for (const u of images) { const im = document.createElement("img"); im.src = u; im.alt = "Attached image"; box.appendChild(im); }
+        body.appendChild(box);
+    }
+    body.append(text);
 
     if (role === "assistant" && !isError) {
         const actions = document.createElement("div"); actions.className = "message-actions";
@@ -1155,7 +1234,7 @@ function renderChat() {
     const animFrom = sameConv ? renderedCount : Infinity;   // only newly added messages animate
     renderedConvId = c.id; renderedCount = c.messages.length;
     const list = document.createElement("div"); list.className = "message-list" + (sameConv ? "" : " fade");
-    c.messages.forEach((m, idx) => list.appendChild(addMessageElement(m.role, m.content, m.timestamp, m.model, m.error, idx >= animFrom)));
+    c.messages.forEach((m, idx) => list.appendChild(addMessageElement(m.role, m.content, m.timestamp, m.model, m.error, idx >= animFrom, m.images)));
     chatArea.appendChild(list);
     requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; updateScrollButton(); });
     updateComposer();
@@ -1178,7 +1257,7 @@ function updateComposer() {
     messageInput.disabled = !canSend;
     messageInput.placeholder = !canSend ? "Log in to chat with Beam..."
         : (isLoggedIn() ? (isSyntaxOn() ? "Describe the code you want…" : "Message Beam...") : "Message Beam o1 Flash (guest mode)...");
-    sendButton.disabled = !canSend || thinking || messageInput.value.trim().length === 0;
+    sendButton.disabled = !canSend || thinking || (messageInput.value.trim().length === 0 && pendingImages.length === 0);
 }
 const isNearBottom = (th = 120) => chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight <= th;
 function resizeInput() {
@@ -1196,12 +1275,14 @@ function updateScrollButton() { $("scrollBottom").classList.toggle("visible", ch
 async function sendMessage() {
     const guest = !isLoggedIn();
     if (guest && !GUEST_ALLOWED_MODELS.includes(selectedModel)) { showToast("Please log in to use this model"); openAuthModal("login"); return; }
-    const text = messageInput.value.trim();
+    const images = supportsImages(selectedModel) ? pendingImages.slice() : [];
+    const text = messageInput.value.trim() || (images.length ? "What is in this image?" : "");
     if (!text || thinking) return;
 
     const conv = ensureActiveConversation();
     const modelUsed = selectedModel, useSyntax = isSyntaxOn(), ts = Date.now();
-    conv.messages.push({ role: "user", content: text, timestamp: ts });
+    conv.messages.push({ role: "user", content: text, timestamp: ts, images: images.length ? images : undefined });
+    pendingImages = []; renderAttachments();
     if (conv.title === "New conversation" || conv.messages.length === 1) conv.title = deriveTitle(text);
     conv.updatedAt = ts;
     messageInput.value = ""; resizeInput();
@@ -1223,7 +1304,7 @@ async function sendMessage() {
     try {
         const response = await fetch(API_URL + "/chat/stream", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: chatBody(conv.id, text, modelUsed, guest, useSyntax)
+            body: chatBody(conv.id, text, modelUsed, guest, useSyntax, images)
         });
         if (response.status === 401) { expireLogin(); throw new Error("Your login expired. Please log in again."); }
         if (!response.ok) {
@@ -1326,6 +1407,20 @@ messageInput.addEventListener("keydown", e => {
 });
 sendButton.addEventListener("click", sendMessage);
 $("newChatButton").addEventListener("click", newChat);
+$("attachButton").addEventListener("click", () => { if (!thinking) $("imageInput").click(); });
+$("imageInput").addEventListener("change", e => { addImageFiles(Array.from(e.target.files)); e.target.value = ""; });
+messageInput.addEventListener("paste", e => {
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []).filter(f => f.type.startsWith("image/"));
+    if (files.length && supportsImages(selectedModel)) { e.preventDefault(); addImageFiles(files); }
+});
+const composerEl = document.querySelector(".composer");
+composerEl.addEventListener("dragover", e => { if (supportsImages(selectedModel)) { e.preventDefault(); composerEl.classList.add("drop"); } });
+composerEl.addEventListener("dragleave", () => composerEl.classList.remove("drop"));
+composerEl.addEventListener("drop", e => {
+    composerEl.classList.remove("drop");
+    const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith("image/"));
+    if (files.length && supportsImages(selectedModel)) { e.preventDefault(); addImageFiles(files); }
+});
 $("clearButton").addEventListener("click", clearCurrentConversation);
 $("exportButton").addEventListener("click", exportConversation);
 $("scrollBottom").addEventListener("click", () => chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: "smooth" }));
