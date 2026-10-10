@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0b0d12">
 <meta name="description" content="Beam AI">
 <link rel="icon" type="image/png" href="./BeamIcon.png">
@@ -29,13 +29,13 @@
   --text:#14161a; --muted:#5a606d; --faint:#8a8f99;
   --hover:rgba(0,0,0,.045); --green:#1fa35a;
 }
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
 button,input,textarea{font:inherit;color:inherit}
 button{border:0;background:none;cursor:pointer}
 .hidden{display:none!important}
 kbd{font-family:inherit;font-size:11px;color:#666;margin-left:auto}
 
-.app{display:flex;width:100%;height:100%}
+.app{display:flex;width:100%;height:var(--app-h,100dvh)}
 
 /* Sidebar */
 .sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);height:100%;display:flex;flex-direction:column;gap:10px;padding:12px;background:var(--surface);border-right:1px solid var(--border);transition:width .18s ease,min-width .18s ease,transform .22s ease;z-index:30}
@@ -162,7 +162,7 @@ body.is-generating .brand-logo{animation:spin 1.1s linear infinite}
 .scroll-bottom.visible{display:flex}
 
 /* Composer */
-.composer-wrap{position:absolute;left:0;right:0;bottom:0;padding:14px 20px 14px;background:linear-gradient(transparent,var(--bg) 28%);z-index:5}
+.composer-wrap{position:absolute;left:0;right:0;bottom:0;padding:14px 20px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 28%);z-index:5}
 .composer{width:min(840px,100%);margin:0 auto;padding:12px 12px 10px 16px;border:1px solid var(--border-strong);border-radius:20px;background:var(--surface);box-shadow:0 12px 40px rgba(0,0,0,.25);transition:.15s}
 .composer:focus-within{border-color:color-mix(in srgb,var(--accent) 50%,var(--border-strong));box-shadow:0 12px 40px rgba(0,0,0,.25),0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
 #messageInput{display:block;width:100%;max-height:190px;resize:none;border:0;outline:0;background:none;padding:4px 0 8px;line-height:1.55}
@@ -246,7 +246,7 @@ input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--border
   .mobile-only{display:inline-flex}
   .topbar{padding:0 10px}
   .chat-area{padding:20px 14px 180px}
-  .composer-wrap{padding:10px 10px 10px}
+  .composer-wrap{padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
   .suggestions{grid-template-columns:1fr}
   .hide-mobile{display:none}
   .message{gap:9px}
@@ -1180,9 +1180,14 @@ function updateComposer() {
         : (isLoggedIn() ? (isSyntaxOn() ? "Describe the code you want…" : "Message Beam...") : "Message Beam o1 Flash (guest mode)...");
     sendButton.disabled = !canSend || thinking || messageInput.value.trim().length === 0;
 }
-function resizeInput() { messageInput.style.height = "auto"; messageInput.style.height = Math.min(messageInput.scrollHeight, 190) + "px"; }
-
 const isNearBottom = (th = 120) => chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight <= th;
+function resizeInput() {
+    messageInput.style.height = "auto";
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 190) + "px";
+    // the composer grew upward: keep the latest messages visible above it
+    if (isNearBottom(200)) chatArea.scrollTop = chatArea.scrollHeight;
+}
+
 function updateScrollButton() { $("scrollBottom").classList.toggle("visible", chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight > 250); }
 
 /* ===================================================================
@@ -1384,6 +1389,34 @@ document.addEventListener("keydown", e => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (e.key.toLowerCase() === "n" && !e.ctrlKey && !e.altKey && !e.metaKey && !["INPUT", "TEXTAREA"].includes(tag)) newChat();
 });
+
+/* ===================================================================
+   Keyboard / visual viewport handling (Android)
+   Sizes the app to the visible area so the composer and latest
+   messages stay above the on-screen keyboard.
+   =================================================================== */
+const vv = window.visualViewport;
+let lastViewportH = 0;
+function syncViewport() {
+    const h = Math.round(vv ? vv.height : window.innerHeight);
+    const keyboardOpened = lastViewportH && h < lastViewportH - 80;
+    const wasAtBottom = isNearBottom(160);
+    document.documentElement.style.setProperty("--app-h", h + "px");
+    window.scrollTo(0, 0);                       // stop the browser panning the page
+    if (keyboardOpened && wasAtBottom) chatArea.scrollTop = chatArea.scrollHeight;
+    lastViewportH = h;
+}
+if (vv) {
+    vv.addEventListener("resize", syncViewport);
+    vv.addEventListener("scroll", () => window.scrollTo(0, 0));
+}
+window.addEventListener("resize", syncViewport);
+window.addEventListener("orientationchange", () => setTimeout(syncViewport, 250));
+messageInput.addEventListener("focus", () => {
+    // Android animates the keyboard in; wait for it to settle
+    setTimeout(() => { syncViewport(); chatArea.scrollTop = chatArea.scrollHeight; }, 300);
+});
+syncViewport();
 
 /* ===================================================================
    Init
