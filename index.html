@@ -289,7 +289,7 @@ input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--border
 .swatch{transition:transform .15s}
 .swatch:hover{transform:scale(1.12)}
 
-/* Welcome screen */
+/* Welcome screen (in-chat empty state) */
 .welcome>*{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
 .welcome>.hero-logo{animation:rise .55s cubic-bezier(.2,.7,.2,1) both,floaty 5s ease-in-out .6s infinite,glow 5s ease-in-out .6s infinite}
 .welcome>h1{animation-delay:.08s}
@@ -348,6 +348,82 @@ input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--border
 .top-title strong{animation:fadein .3s ease}
 body.theme-anim,body.theme-anim *{transition:background-color .35s ease,color .35s ease,border-color .35s ease!important}
 
+/* =====================================================================
+   Landing screen, Daily Challenge, polish
+   ===================================================================== */
+:focus-visible{outline:2px solid color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:2px}
+.composer :focus-visible,.search input:focus-visible,#messageInput:focus-visible{outline:none}
+button{-webkit-tap-highlight-color:transparent}
+::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.chat-area::-webkit-scrollbar,.conversation-area::-webkit-scrollbar,.modal-card::-webkit-scrollbar{width:8px}
+.chat-area::-webkit-scrollbar-thumb,.conversation-area::-webkit-scrollbar-thumb,.modal-card::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px}
+.sidebar .brand{cursor:pointer;border-radius:10px;transition:opacity .15s}
+.sidebar .brand:hover{opacity:.8}
+.message-content pre{max-width:100%}
+
+.landing{position:fixed;inset:0;z-index:90;overflow-y:auto;overflow-x:hidden;background:
+  radial-gradient(ellipse 80% 60% at 50% -10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 60%),
+  radial-gradient(ellipse 50% 40% at 90% 110%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 60%),var(--bg);
+  animation:fadein .4s ease;transition:opacity .35s ease,transform .35s ease}
+.landing.leaving{opacity:0;transform:scale(1.02);pointer-events:none}
+.ld-wrap{width:min(1040px,100%);margin:0 auto;padding:0 20px 48px}
+.ld-nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.ld-nav-right{display:flex;gap:8px;align-items:center}
+.ld-link{padding:8px 14px;border-radius:10px;color:var(--muted);font-weight:550;font-size:13px;transition:.15s}
+.ld-link:hover{background:var(--hover);color:var(--text)}
+.ld-edition{display:flex;justify-content:center;margin-top:clamp(14px,4vh,40px)}
+.ld-edition .seg button{padding:8px 20px;font-weight:600}
+.ld-edition .seg button.active{background:var(--accent);color:var(--on-accent)}
+.ld-hero{text-align:center;margin:clamp(26px,6vh,56px) auto 0;max-width:780px}
+.ld-hero>*{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+.ld-kicker{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--border-strong);border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ld-kicker i{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.ld-hero h1{margin:18px 0 0;font-size:clamp(34px,6.4vw,64px);line-height:1.06;letter-spacing:-2px;font-weight:700;animation-delay:.06s}
+.ld-hero h1 em{font-style:normal;color:var(--accent)}
+[data-edition="coder"] .ld-hero h1{font-family:var(--mono);letter-spacing:-2.5px;font-weight:600}
+.ld-hero p{margin:18px auto 0;max-width:620px;font-size:clamp(14px,2vw,17px);line-height:1.65;color:var(--muted);animation-delay:.12s}
+.ld-cta{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:28px;animation-delay:.18s}
+.ld-cta .btn{height:46px;padding:0 24px;font-size:14px;border-radius:12px;transition:transform .15s,opacity .15s}
+.ld-cta .btn:hover{transform:translateY(-2px)}
+.ld-note{margin-top:12px;font-size:12px;color:var(--faint);animation:rise .55s .24s both}
+.ld-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:clamp(34px,7vh,64px)}
+.ld-card{padding:20px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);animation:rise .5s cubic-bezier(.2,.7,.2,1) both;transition:.15s}
+.ld-card:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--border-strong));transform:translateY(-2px)}
+.ld-card:nth-child(2){animation-delay:.07s}.ld-card:nth-child(3){animation-delay:.14s}
+.ld-card .ic{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font-weight:700;font-family:var(--mono);margin-bottom:12px}
+.ld-card strong{display:block;font-size:14px;margin-bottom:6px}
+.ld-card span{display:block;font-size:13px;color:var(--muted);line-height:1.6}
+.ld-daily{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:12px;padding:20px 22px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-radius:var(--radius);background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 10%,var(--surface)),var(--surface))}
+.ld-daily .t small{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.ld-daily .t strong{font-size:16px}
+.ld-daily .t span{display:block;margin-top:4px;font-size:12px;color:var(--muted)}
+.chat-daily{text-align:left;margin-top:14px}
+.ld-foot{margin-top:32px;text-align:center;font-size:11px;color:var(--faint)}
+
+.daily-btn{position:relative;width:auto!important;padding:0 10px;gap:6px;font-size:13px}
+.daily-btn b{font-size:11px;font-weight:700;color:var(--accent)}
+.daily-btn.done b{color:var(--green)}
+
+.dc-meta{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.dc-pill{padding:4px 10px;border:1px solid var(--border-strong);border-radius:999px;font-size:11px;font-weight:600;color:var(--muted)}
+.dc-pill.accent{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
+.dc-box{margin:12px 0;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);font-size:14px;line-height:1.65;color:var(--text)}
+.dc-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.dc-actions .btn{height:36px}
+.dc-answer{width:100%;min-height:96px;margin-top:10px;padding:12px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface-2);resize:vertical;outline:0;line-height:1.55}
+.dc-answer:focus{border-color:var(--accent)}
+.dc-bar{height:6px;border-radius:6px;background:var(--surface-2);overflow:hidden;margin-top:6px}
+.dc-bar i{display:block;height:100%;background:var(--accent);border-radius:6px;transition:width .4s ease}
+.dc-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.dc-badge{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:var(--surface-2);color:var(--faint);border:1px solid var(--border)}
+.dc-badge.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
+.dc-list{margin-top:8px;max-height:280px;overflow-y:auto}
+
+@media(max-width:800px){
+  .ld-grid{grid-template-columns:1fr}
+  .ld-nav .ld-link.hide-sm{display:none}
+  .ld-cta .btn{width:100%}
+}
 </style>
 <title>Beam</title>
 </head>
@@ -1544,6 +1620,298 @@ setInterval(pollHealth, HEALTH_POLL_MS);
 setInterval(() => { if (isLoggedIn() && !thinking) syncConversations(); }, 20000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && isLoggedIn() && !thinking) syncConversations(); });
 
+/* =====================================================================
+   Landing screen + Daily Beam Challenge (client-side, localStorage)
+   ===================================================================== */
+(() => {
+"use strict";
+
+const ED_KEY = "beam_edition_v1", ENTER_KEY = "beam_entered_v1", DAILY_KEY = "beam_daily_v1";
+const LAUNCH = new Date(2026, 9, 16);   // challenge #1
+
+/* ---------------- Messaging ---------------- */
+const WHY = "Beam is an AI for people who build things: capable chat and coding models you can use without a real-money purchase.";
+const EDITIONS = {
+  general: { label: "General Edition", slogan: ["Made for all you say,", "within reach."],
+    cta: "Start chatting", note: "Guests can try Beam o1 Flash instantly. Log in to unlock every model.", model: "beam-1" },
+  coder:   { label: "Coder Edition", slogan: ["Coding? Workloads", "now lighter with Beam."],
+    cta: "Open Coder Edition", note: "Coder models and Syntax Code mode need a free account.", model: "beam-syntax-3" }
+};
+const PILLARS = [
+  ["B", "Built for builders", "Made for people who ship: developers, makers and tinkerers who want an AI that keeps up."],
+  ["∞", "Capable, not gated", "Strong models without a required real-money purchase. Create an account and start."],
+  ["{ }", "Coder-ready", "Syntax Code mode, dedicated coding models and image reading for debugging what you see."]
+];
+
+/* ---------------- Daily challenge bank ---------------- */
+const CATS = { logic: "Logic", coding: "Coding", creative: "Creative", problem: "Problem-solving" };
+const BANK = [
+  ["logic", "Three switches", "Three switches outside a closed room control three bulbs inside. You may enter the room only once. How do you work out which switch controls which bulb?"],
+  ["coding", "Palindrome check", "Write a function that returns true if a string is a palindrome, ignoring case, spaces and punctuation. Any language. Bonus: explain its time complexity."],
+  ["creative", "Six-word story", "Write a six-word story about a robot learning to wait. Exactly six words."],
+  ["problem", "The 50-minute meeting", "Your 30-minute weekly meeting always runs 50 minutes. Propose three concrete changes that fix it without cancelling it."],
+  ["logic", "Two guards", "Two doors: one leads to freedom, one to doom. One guard always lies, one always tells the truth, and you don't know which is which. You can ask one question to one guard. What do you ask?"],
+  ["coding", "Two Sum", "Given an array of integers and a target, return the indices of the two numbers that add up to the target. Aim for better than O(n²)."],
+  ["creative", "Lighthouse café", "Invent a name, a slogan and a signature drink for a café inside a lighthouse."],
+  ["problem", "Dorm plants", "Six dorm-mates share eight plants and keep forgetting to water them. Design a system that works without any app."],
+  ["logic", "Eight balls", "Eight balls look identical but one is slightly heavier. Using a balance scale only twice, how do you find it?"],
+  ["coding", "Debounce", "Implement a debounce(fn, ms) function in JavaScript and explain one real situation where you would use it."],
+  ["creative", "Invisible umbrella", "Write a 60-word product description for an invisible umbrella. Make people want one."],
+  ["problem", "One small bag", "You're packing for a week-long trip with a single small bag and a mix of weather. Build the packing list and justify each choice."],
+  ["logic", "What comes next?", "2, 6, 12, 20, 30, ... What is the next number, and what is the rule? Can you give a formula for the n-th term?"],
+  ["coding", "FizzBuzz plus", "FizzBuzz with 3, 5 and 7 (Fizz, Buzz, Bazz and combinations) for 1 to 105. Make it short and readable."],
+  ["creative", "Describe a color", "Describe the color blue to someone who has never seen anything. No other color names allowed."],
+  ["problem", "Faster lunch line", "A school lunch line takes 20 minutes. Halve the wait without hiring more staff. What do you change first, and how would you measure success?"]
+].map(([cat, title, text]) => ({ cat, title, text }));
+
+const BADGES = [[3, "3-day streak"], [7, "7-day streak"], [30, "30-day streak"]];
+const XP_BASE = 10, XP_MODEL_BONUS = 5, XP_PER_LEVEL = 50;
+
+/* ---------------- Helpers / state ---------------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const keyOf = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const dayIndex = d => Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - LAUNCH) / 864e5);
+const today = () => new Date();
+const num = d => Math.max(1, dayIndex(d) + 1);
+const pick = d => BANK[((dayIndex(d) % BANK.length) + BANK.length) % BANK.length];
+
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(DAILY_KEY)); if (s && s.done) return s; } catch {}
+  return { done: {}, usage: {}, xp: 0 };
+}
+function save(s) { try { localStorage.setItem(DAILY_KEY, JSON.stringify(s)); } catch {} }
+
+function streak(s) {
+  let d = today(), n = 0;
+  if (!s.done[keyOf(d)]) d.setDate(d.getDate() - 1);   // today not done yet: streak still alive until midnight
+  while (s.done[keyOf(d)]) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+const level = s => Math.floor(s.xp / XP_PER_LEVEL) + 1;
+
+/* ---------------- Usage tracking (rewards tied to model use) ----------------
+   Counts one "use" each time a generation starts. */
+(function trackUsage() {
+  let was = false;
+  new MutationObserver(() => {
+    const now = document.body.classList.contains("is-generating");
+    if (now && !was) {
+      const s = load(), k = keyOf(today());
+      const u = s.usage[k] || (s.usage[k] = { n: 0, models: {} });
+      u.n++; u.models[selectedModel] = (u.models[selectedModel] || 0) + 1;
+      save(s);
+    }
+    was = now;
+  }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+})();
+
+/* ---------------- Landing ---------------- */
+let edition = localStorage.getItem(ED_KEY) === "coder" ? "coder" : "general";
+
+function buildLanding() {
+  const el = document.createElement("div");
+  el.className = "landing"; el.id = "landing"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Welcome to Beam");
+  el.innerHTML =
+    '<div class="ld-wrap">' +
+      '<nav class="ld-nav"><div class="brand"><img src="./BeamIcon.png" alt="" class="brand-logo"><span class="brand-name">Beam</span></div>' +
+      '<div class="ld-nav-right">' +
+      '<button class="ld-link" id="ldAuth"></button><button class="btn" id="ldAuth2"></button></div></nav>' +
+      '<div class="ld-edition"><div class="seg" id="ldSeg"><button data-ed="general">General</button><button data-ed="coder">Coder</button></div></div>' +
+      '<section class="ld-hero"><span class="ld-kicker"><i></i><span id="ldKicker"></span></span>' +
+      '<h1 id="ldSlogan"></h1><p>' + esc(WHY) + '</p>' +
+      '<div class="ld-cta"><button class="btn" id="ldStart"></button></div>' +
+      '<div class="ld-note" id="ldNote"></div></section>' +
+      '<section class="ld-grid">' + PILLARS.map(p => '<div class="ld-card"><div class="ic">' + esc(p[0]) + '</div><strong>' + esc(p[1]) + '</strong><span>' + esc(p[2]) + '</span></div>').join("") + '</section>' +
+      '<div class="ld-foot">Beam is experimental and can make mistakes. Check important information.</div>' +
+    '</div>';
+  document.body.appendChild(el);
+
+  el.querySelectorAll("[data-ed]").forEach(b => b.addEventListener("click", () => setEdition(b.dataset.ed)));
+  $("ldStart").addEventListener("click", () => enter(true));
+  $("ldAuth").addEventListener("click", () => isLoggedIn() ? logout() : openAuthModal("login"));
+  $("ldAuth2").addEventListener("click", () => isLoggedIn() ? enter(true) : openAuthModal("signup"));
+  refreshLanding();
+}
+
+function setEdition(ed) {
+  edition = ed; localStorage.setItem(ED_KEY, ed);
+  refreshLanding();
+}
+
+function refreshLanding() {
+  const el = $("landing"); if (!el) return;
+  const e = EDITIONS[edition];
+  el.dataset.edition = edition;
+  el.querySelectorAll("[data-ed]").forEach(b => b.classList.toggle("active", b.dataset.ed === edition));
+  $("ldKicker").textContent = "Beam · " + e.label;
+  $("ldSlogan").innerHTML = esc(e.slogan[0]) + "<br><em>" + esc(e.slogan[1]) + "</em>";
+  $("ldStart").textContent = e.cta;
+  $("ldNote").textContent = e.note;
+  const li = isLoggedIn();
+  $("ldAuth").textContent = li ? "Log out" : "Log in";
+  $("ldAuth2").textContent = li ? "Continue" : "Sign up";
+}
+
+function enter(applyEdition) {
+  if (applyEdition && isLoggedIn() && !thinking) {
+    selectModel(EDITIONS[edition].model);
+    syntaxActive = edition === "coder";
+    localStorage.setItem(SYNTAX_KEY, syntaxActive ? "1" : "0");
+    updateModelUI(); updateComposer();
+  } else if (applyEdition && !isLoggedIn() && edition === "coder") {
+    showToast("Log in to unlock the Coder models");
+  }
+  try { sessionStorage.setItem(ENTER_KEY, "1"); } catch {}
+  const el = $("landing"); if (!el) return;
+  el.classList.add("leaving");
+  setTimeout(() => el.remove(), 380);
+  setTimeout(() => messageInput.focus(), 400);
+}
+
+function showLanding() {
+  if ($("landing")) return;
+  buildLanding();
+}
+
+/* ---------------- Daily challenge modal ---------------- */
+function openDailyModal(tab) {
+  openModalShell();
+  tab = tab || "today";
+  const s = load(), d = today(), k = keyOf(d), c = pick(d), done = s.done[k], st = streak(s);
+  const lvl = level(s), into = s.xp % XP_PER_LEVEL;
+  let html = "<h2>Daily Beam Challenge</h2>" +
+    '<div class="tabs"><button class="tab' + (tab === "today" ? " active" : "") + '" data-t="today">Today</button>' +
+    '<button class="tab' + (tab === "archive" ? " active" : "") + '" data-t="archive">Archive</button></div>';
+
+  if (tab === "today") {
+    html += '<div class="dc-meta"><span class="dc-pill accent">#' + num(d) + '</span><span class="dc-pill">' + esc(CATS[c.cat]) + '</span>' +
+      '<span class="dc-pill">' + st + '-day streak</span><span class="dc-pill">Level ' + lvl + ' · ' + s.xp + ' XP</span></div>' +
+      '<div class="dc-box"><strong>' + esc(c.title) + '</strong><br>' + esc(c.text) + '</div>';
+    if (done) {
+      html += '<p>Done for today' + (done.xp ? ' (+' + done.xp + ' XP)' : '') + '. A new challenge unlocks at midnight.</p>' +
+        '<div class="dc-actions"><button class="btn" id="dcShare">Copy shareable result</button></div>';
+    } else {
+      html += '<textarea class="dc-answer" id="dcAnswer" placeholder="Write your answer here (at least a sentence)…"></textarea>' +
+        '<div class="dc-actions"><button class="btn" id="dcDone">Complete challenge</button>' +
+        '<button class="btn ghost" id="dcHint">Ask Beam for a hint</button>' +
+        '<button class="btn ghost" id="dcSolve">Solve it with Beam</button></div>' +
+        '<p>Earn ' + XP_BASE + ' XP, plus ' + XP_MODEL_BONUS + ' bonus XP if you used a Beam model today and streak bonuses.</p>';
+    }
+    html += '<div class="setting"><span class="lbl">Level progress</span><div class="dc-bar"><i style="width:' + (into / XP_PER_LEVEL * 100) + '%"></i></div></div>' +
+      '<div class="dc-badges">' + BADGES.map(b => '<span class="dc-badge' + (st >= b[0] || bestStreak(s) >= b[0] ? " on" : "") + '">' + b[1] + '</span>').join("") + '</div>';
+  } else {
+    const items = Object.keys(s.done).sort().reverse().slice(0, 40);
+    html += items.length
+      ? '<div class="dc-list">' + items.map(i => '<div class="kv"><span>' + esc(i) + ' · ' + esc(s.done[i].title) + '</span><span>' + esc(CATS[s.done[i].cat] || "") + '</span></div>').join("") + '</div>'
+      : "<p>No completed challenges yet. Finish today's to start your archive.</p>";
+  }
+  modalContent.innerHTML = html;
+
+  modalContent.querySelectorAll("[data-t]").forEach(b => b.addEventListener("click", () => openDailyModal(b.dataset.t)));
+  const ask = prompt => {
+    closeModal(); enter(false);
+    if (thinking) return;
+    messageInput.value = prompt; updateComposer(); sendMessage();
+  };
+  const hint = $("dcHint"), solve = $("dcSolve"), fin = $("dcDone"), share = $("dcShare");
+  if (hint) hint.addEventListener("click", () => ask("Daily Beam Challenge: \"" + c.title + "\". " + c.text + "\n\nGive me a hint only. Do not reveal the full answer."));
+  if (solve) solve.addEventListener("click", () => ask("Daily Beam Challenge: \"" + c.title + "\". " + c.text + "\n\nSolve it and explain your reasoning step by step."));
+  if (fin) fin.addEventListener("click", () => {
+    const a = $("dcAnswer").value.trim();
+    if (a.length < 10) { showToast("Write a short answer first"); return; }
+    const st2 = load();
+    const used = st2.usage[k] && st2.usage[k].n > 0;
+    const prev = streak(st2) + 1;
+    const xp = XP_BASE + (used ? XP_MODEL_BONUS : 0) + Math.min(prev - 1, 5);
+    st2.done[k] = { cat: c.cat, title: c.title, ts: Date.now(), xp };
+    st2.xp += xp; save(st2);
+    showToast("+" + xp + " XP · " + streak(st2) + "-day streak");
+    refreshDailyButton(); refreshLanding(); openDailyModal("today");
+  });
+  if (share) share.addEventListener("click", async () => {
+    const st2 = load(), n = streak(st2);
+    const text = "Beam Daily #" + num(d) + " · " + CATS[c.cat] + " ✔\nStreak: " + n + " day" + (n === 1 ? "" : "s") + " · Level " + level(st2);
+    try { await navigator.clipboard.writeText(text); showToast("Result copied"); } catch { showToast("Couldn't copy"); }
+  });
+}
+
+function bestStreak(s) {
+  const days = Object.keys(s.done).sort();
+  let best = 0, run = 0, prev = null;
+  for (const k of days) {
+    const [y, m, dd] = k.split("-").map(Number), t = new Date(y, m - 1, dd).getTime();
+    run = prev !== null && Math.round((t - prev) / 864e5) === 1 ? run + 1 : 1;
+    best = Math.max(best, run); prev = t;
+  }
+  return best;
+}
+
+/* ---------------- Top bar button ---------------- */
+function refreshDailyButton() {
+  const b = document.getElementById("dailyButton"); if (!b) return;
+  const s = load(), done = !!s.done[keyOf(today())], st = streak(s);
+  b.classList.toggle("done", done);
+  b.querySelector("b").textContent = st ? st + "d" : "";
+  b.title = done ? "Daily challenge complete" : "Daily Beam Challenge";
+  refreshChatCard();
+}
+
+/* ---------------- Daily card on the chat screen (empty-chat state) ---------------- */
+function refreshChatCard() {
+  const card = document.querySelector(".chat-daily"); if (!card) return;
+  const s = load(), c = pick(today()), done = !!s.done[keyOf(today())], st = streak(s);
+  card.querySelector("small").textContent = "Daily Beam Challenge #" + num(today());
+  card.querySelector("strong").textContent = CATS[c.cat] + ": " + c.title;
+  card.querySelector(".meta").textContent = (done ? "Completed today. " : "") + (st ? st + "-day streak" : "Start a streak today");
+  card.querySelector(".btn").textContent = done ? "View" : "Take it";
+}
+function mountChatCard() {
+  const w = chatArea.querySelector(".welcome");
+  if (!w || w.querySelector(".chat-daily")) return;
+  const card = document.createElement("div");
+  card.className = "ld-daily chat-daily";
+  card.innerHTML = '<div class="t"><small></small><strong></strong><span class="meta"></span></div><button class="btn" type="button">Take it</button>';
+  card.querySelector(".btn").addEventListener("click", () => openDailyModal());
+  w.appendChild(card);
+  refreshChatCard();
+}
+new MutationObserver(mountChatCard).observe(chatArea, { childList: true });
+mountChatCard();
+function addDailyButton() {
+  const bar = document.querySelector(".top-actions"); if (!bar) return;
+  const b = document.createElement("button");
+  b.className = "icon-btn daily-btn"; b.id = "dailyButton"; b.type = "button"; b.setAttribute("aria-label", "Daily Beam Challenge");
+  b.innerHTML = "<span>★</span><b></b>";
+  b.addEventListener("click", () => openDailyModal());
+  bar.prepend(b);
+  refreshDailyButton();
+}
+
+/* ---------------- Boot ---------------- */
+addDailyButton();
+const brand = document.querySelector(".sidebar .brand");
+if (brand) brand.addEventListener("click", () => { if (!thinking) { showLanding(); refreshLanding(); } });
+let entered = false;
+try { entered = sessionStorage.getItem(ENTER_KEY) === "1"; } catch {}
+// Guests are met with the welcome screen on every load; logged-in users skip it after the first entry this session.
+if (!isLoggedIn() || !entered) buildLanding();
+
+// Logging out (or an expired login) brings the welcome screen back.
+const _logout = logout, _expireLogin = expireLogin, _onAuthChanged = onAuthChanged;
+const backToWelcome = () => { try { sessionStorage.removeItem(ENTER_KEY); } catch {} showLanding(); refreshLanding(); };
+window.logout = function () { _logout(); backToWelcome(); };
+window.expireLogin = function () { _expireLogin(); backToWelcome(); };
+// Logging in from the welcome screen drops you straight into the chat.
+window.onAuthChanged = async function () {
+  await _onAuthChanged();
+  refreshLanding(); refreshDailyButton();
+  if (isLoggedIn() && $("landing")) enter(true);
+};
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("landing") && modal.classList.contains("hidden")) enter(false); });
+window.addEventListener("storage", () => { refreshLanding(); refreshDailyButton(); });
+setInterval(() => { refreshLanding(); refreshDailyButton(); }, 60000);
+})();
 </script>
 </body>
 </html>
