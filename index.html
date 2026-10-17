@@ -557,6 +557,7 @@ const MODELS = {
     "beam-syntax-3": { name: "BeamSyntax 3",  desc: "Efficient, specializes in coding. Can read images.",  syntaxCode: true, vision: true },
     "beam-coder-1":  { name: "BeamCoder 1",   desc: "A step up from BeamSyntax. Advanced coder.",         syntaxCode: true  },
     "beam-o2":       { name: "Beam o2",       desc: "Mini model, lighter usage, made for talking.",       syntaxCode: false },
+    "beam-o3":       { name: "Beam o3",       desc: "Mini model, better and efficient.",                  syntaxCode: false },
     "beam-o1-flash": { name: "Beam o1 Flash", desc: "Fast and light. Only model available without login.", syntaxCode: false }
 };
 const DEFAULT_MODEL = "beam-1";
@@ -704,7 +705,7 @@ function sanitizeModel(id) {
 }
 
 const MODEL_CATEGORIES = [
-    { name: "Beam Mini",  desc: "Light and fast, made for talking", ids: ["beam-o2", "beam-o1-flash"] },
+    { name: "Beam Mini",  desc: "Light and fast, made for talking", ids: ["beam-o1-flash", "beam-o2","beam-o3"] },
     { name: "Beam Main",  desc: "Everyday use and conversation",    ids: ["beam-1", "beam-1-fol"] },
     { name: "Beam Coder", desc: "Specialized for code",             ids: ["beam-syntax-3", "beam-coder-1"] }
 ];
