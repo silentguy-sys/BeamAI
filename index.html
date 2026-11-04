@@ -640,9 +640,7 @@ function renderMath(m) {
 function parseMarkdown(text) {
     if (!text) return "";
 
-    // 1) Pull math out BEFORE anything else touches the text, so its
-    //    backslashes, braces, underscores and asterisks survive intact.
-    //    Code blocks and inline code are passed through untouched.
+    // 1) Pull math out BEFORE anything else touches the text.
     const mathStore = [];
     text = text.replace(
         /(```[\s\S]*?(?:```|$))|(`[^`\n]+`)|\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(?<![\\$\w])\$(?!\$)([^$\n]*?[^\s$][^$\n]*?)\$(?![\w$])/g,
@@ -697,7 +695,7 @@ function parseMarkdown(text) {
         }
     }
     flushPara(); flushList();
-    if (inCode) out.push(codeHtml());   // unfinished block while streaming
+    if (inCode) out.push(codeHtml());
 
     // 3) Put the rendered math back in place.
     return out.join("").replace(/\u0001(\d+)\u0001/g, (_, i) => renderMath(mathStore[+i]));
