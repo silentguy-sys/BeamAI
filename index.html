@@ -645,7 +645,7 @@ function parseMarkdown(text) {
     //    Code blocks and inline code are passed through untouched.
     const mathStore = [];
     text = text.replace(
-        /(```[\s\S]*?(?:```|$))|(`[^`\n]+`)|\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(?<![\\$])\$([^\s$](?:[^$\n]*?[^\s$])?)\$(?!\d)/g,
+                /(```[\s\S]*?(?:```|$))|(`[^`\n]+`)|\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(?<![\\$\w])\$(?!\$)([^$\n]*?[^\s$][^$\n]*?)\$(?![\w$])/g,
         (m, code, icode, dd, bd, pi, inl) => {
             if (code || icode) return m;
             const display = dd !== undefined || bd !== undefined;
